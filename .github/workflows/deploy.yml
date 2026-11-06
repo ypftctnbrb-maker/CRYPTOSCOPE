@@ -31,6 +31,8 @@ jobs:
           touch public/.nojekyll
           if grep -q 'id="language"' public/index.html; then echo 'ERROR: language selector still present'; exit 1; fi
           if grep -q 'English</option>' public/index.html; then echo 'ERROR: English option still present'; exit 1; fi
+          if grep -Eq 'const extras=|},en:\{' public/assets/app.js; then echo 'ERROR: non-Russian localization remains'; exit 1; fi
+          if grep -q 'localization.js' public/index.html; then echo 'ERROR: localization script still linked'; exit 1; fi
           echo "Publishing commit $GITHUB_SHA (Russian-only)"
           grep -o 'assets/app.js?v=[^" ]*' public/index.html
       - name: Upload static site
