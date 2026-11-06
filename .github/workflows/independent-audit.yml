@@ -1,0 +1,53 @@
+name: Independent QA audit
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 4 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  independent-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          set -eu
+          find assets -type f -name '*.js' -print -exec node --check {} \;
+      - name: Check HTML and asset references
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('index.html').read_text(encoding='utf-8')
+          assert '<html' in html.lower() and '</html>' in html.lower(), 'Missing HTML root'
+          for url in re.findall(r'(?:src|href)\s*=\s*["\']([^"\']+)["\']',html):
+              if url.startswith(('http:', 'https:', '//', '#', 'data:', 'mailto:')): continue
+              path=url.split('?',1)[0].split('#',1)[0]
+              if not path or path=='/': continue
+              local=Path(path.lstrip('./'))
+              assert local.is_file(), f'Missing referenced asset: {url}'
+          print('Local HTML asset references verified')
+          PY
+      - name: Static security heuristics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          files=[p for p in Path('.').rglob('*') if p.is_file() and p.suffix in ('.js','.html','.css') and '.git' not in p.parts]
+          for p in files:
+              s=p.read_text(encoding='utf-8')
+              if re.search(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',s):
+                  raise SystemExit(f'Potential embedded private key in {p}')
+          print('No embedded PEM private keys found; this is not a full security audit')
+          PY
+      - name: Audit limitations
+        run: |
+          echo 'PASS only means static checks succeeded.'
+          echo 'Manual browser tests, API correctness, CVD/OI validation, accessibility and security review remain mandatory.'
