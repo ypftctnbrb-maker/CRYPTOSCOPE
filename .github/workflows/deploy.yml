@@ -19,12 +19,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      - name: Prepare restricted public artifact
+        run: |
+          mkdir -p public/assets
+          cp index.html public/index.html
+          cp assets/app.js assets/styles.css public/assets/
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: public
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
