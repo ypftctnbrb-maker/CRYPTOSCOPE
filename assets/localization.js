@@ -19,6 +19,7 @@ const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n
 document.querySelectorAll('[aria-label]').forEach(el=>{const value=el.getAttribute('aria-label');const key=Object.keys(dynamic.ru).find(k=>k===value||Object.values(dynamic).some(d=>d[k]===value));if(key&&dynamic[lang]?.[key]&&value!==dynamic[lang][key])el.setAttribute('aria-label',dynamic[lang][key])});
 document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
 }catch(e){console.warn('Localization error',e)}finally{busy=false}}
+window.CryptoScopeApplyLocale=apply;
 document.getElementById('language')?.addEventListener('change',()=>queueMicrotask(apply));
 let queued=false;new MutationObserver(()=>{if(busy||queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}).observe(document.body,{childList:true,subtree:true,characterData:true});
 apply();
