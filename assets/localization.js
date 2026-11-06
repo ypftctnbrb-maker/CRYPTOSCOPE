@@ -17,7 +17,7 @@ for(const key of Object.keys(dynamic.ru)){for(const values of Object.values(dyna
 for(const key of Object.keys(extended.ru)){for(const values of Object.values(extended))if(values[key])textKeys.set(values[key],['extended',key]);}
 for(const [key,value] of Object.entries(translations.ru)){for(const values of Object.values(translations))if(values[key])textKeys.set(values[key],['translations',key]);}
 function locale(){return document.getElementById('language')?.value||'ru'}
-function t(key,params={}){const code=locale();const value=catalog[code]?.[key]??catalog.en?.[key]??catalog.ru?.[key]??key;return String(value).replace(/\\{(\\w+)\\}/g,(_,name)=>String(params[name]??''))}
+function t(key,params={}){const code=locale();const value=catalog[code]?.[key]??catalog.en?.[key]??catalog.ru?.[key]??key;return String(value).replace(/\{(\w+)\}/g,(_,name)=>String(params[name]??''))}
 function translateLiteral(source){const found=textKeys.get(source);if(!found)return source;const [type,key]=found;const code=locale();return ({translations,extended,dynamic})[type][code]?.[key]??source}
 function apply(){const code=locale();document.documentElement.lang=code;document.documentElement.dir=code==='ar'?'rtl':'ltr';
 document.querySelectorAll('[data-i]').forEach(el=>{const key=el.dataset.i;const value=fullLabels[code]?.[key]??translations[code]?.[key];if(value&&el.textContent!==value)el.textContent=value});
