@@ -28,6 +28,11 @@ jobs:
           mkdir -p public/assets
           cp index.html public/index.html
           cp assets/app.js assets/styles.css public/assets/
+          touch public/.nojekyll
+          if grep -q 'id="language"' public/index.html; then echo 'ERROR: language selector still present'; exit 1; fi
+          if grep -q 'English</option>' public/index.html; then echo 'ERROR: English option still present'; exit 1; fi
+          echo "Publishing commit $GITHUB_SHA (Russian-only)"
+          grep -o 'assets/app.js?v=[^" ]*' public/index.html
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
