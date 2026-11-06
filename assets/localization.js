@@ -9,18 +9,88 @@ const originals={
 'Поиск монеты / тикера':'search','Капитализация':'cap','Объём торгов':'volume','Изменение 24 ч':'change','График цены':'chart','История сделок':'history','Агрессивные покупки':'buy','Агрессивные продажи':'sell','Проверка проекта':'research','Выберите монету из списка для проверки команды и токеномики':'researchHint','Нет данных':'noData','Загрузка…':'loading','Показать ещё 20':'more','Лидеры':'leaders','Рост 24ч':'gainers','Падение 24ч':'losers','★ Избранное':'favorites','Все монеты':'all','Топ-5 по капитализации':'top','Обновить данные':'refresh','Данные ещё не загружены':'notLoaded','Цена':'price','Объём':'vol','Открытый интерес':'oi','Ликвидации':'liquidations','Загрузка истории цен…':'loadingHistory','Выберите монету для загрузки сделок':'selectTrades','Источники':'sources','Spot · Binance':'spot','Монета':'coin',
 'Search coin / ticker':'search','Market cap':'cap','Trading volume':'volume','24h change':'change','Price chart':'chart','Trade history':'history','Aggressive buys':'buy','Aggressive sells':'sell','Project research':'research','Data not available':'noData','Loading…':'loading','Show 20 more':'more','Leaders':'leaders','24h gainers':'gainers','24h losers':'losers','Favorites':'favorites','All coins':'all','Top 5 by market cap':'top','Refresh data':'refresh'};
 const selectors={'search':['#search','placeholder'],'cap':['#sort option[value="market_cap"]','textContent'],'volume':['#sort option[value="total_volume"]','textContent'],'change':['#sort option[value="price_change_percentage_24h"]','textContent'],'research':['#fundamentalPanel h3','textContent'],'researchHint':['#fundamentalStatus','textContent'],'history':['label[for="cvdWindow"]','textContent'],'buy':['#buyVolume','previousElementSibling'],'sell':['#sellVolume','previousElementSibling'],'more':['#majorMore','textContent'],'refresh':['#potentialRefresh','textContent'],'top':['#marketHint','textContent'],'notLoaded':['#potentialUpdated','textContent'],'loadingHistory':['#chartStatus','textContent']};
-let busy=false;
-function apply(){
-if(busy)return;const lang=document.getElementById('language')?.value||'ru';const t=translations[lang];if(!t)return;busy=true;
-try{
-const labels=fullLabels[lang];if(labels){document.querySelectorAll('[data-i]').forEach(el=>{const value=labels[el.dataset.i];if(value&&el.textContent!==value)el.textContent=value})}
-for(const [key,[selector,prop]] of Object.entries(selectors)){const el=document.querySelector(selector);if(!el)continue;if(prop==='previousElementSibling'){const small=el.parentElement?.querySelector('small');if(small)small.textContent=t[key]}else if(prop==='placeholder'){if(el.placeholder!==t[key])el.placeholder=t[key]}else if(prop==='textContent'&&key!=='researchHint'&&key!=='top'&&key!=='notLoaded'&&key!=='loadingHistory'&&el.textContent!==t[key])el.textContent=t[key]}
-const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode())){if(node.parentElement?.closest('script,style,option,[data-i]'))continue;const raw=node.nodeValue,trim=raw.trim();if(!trim)continue;const key=originals[trim]||node.__csKey||Object.keys(translations).flatMap(l=>Object.entries(translations[l])).find(([,v])=>v===trim)?.[0];const ek=node.__csExtended||Object.keys(extended.ru).find(k=>k===trim||Object.values(extended).some(d=>d[k]===trim));const dk=node.__csDynamic||Object.keys(dynamic.ru).find(k=>k===trim||Object.values(dynamic).some(d=>d[k]===trim));if(key&&t[key]){node.__csKey=key;const next=raw.replace(trim,t[key]);if(next!==raw)node.nodeValue=next}else if(ek&&extended[lang]?.[ek]){node.__csExtended=ek;const next=raw.replace(trim,extended[lang][ek]);if(next!==raw)node.nodeValue=next}else if(dk&&dynamic[lang]?.[dk]){node.__csDynamic=dk;const next=raw.replace(trim,dynamic[lang][dk]);if(next!==raw)node.nodeValue=next}}
-document.querySelectorAll('[aria-label]').forEach(el=>{const value=el.getAttribute('aria-label');const key=Object.keys(dynamic.ru).find(k=>k===value||Object.values(dynamic).some(d=>d[k]===value));if(key&&dynamic[lang]?.[key]&&value!==dynamic[lang][key])el.setAttribute('aria-label',dynamic[lang][key])});
-document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
-}catch(e){console.warn('Localization error',e)}finally{busy=false}}
+const catalog=Object.freeze({ru:{...translations.ru,...dynamic.ru,...extended.ru},...Object.fromEntries(['en','es','zh','de','fr','pt','ar','hi','ja'].map(code=>[code,{...translations[code],...fullLabels[code],...dynamic[code],...extended[code]}]))});
+const originalNodes=new WeakMap();
+const textKeys=new Map();
+for(const [key,value] of Object.entries(originals))textKeys.set(key,['translations',value]);
+for(const key of Object.keys(dynamic.ru)){for(const values of Object.values(dynamic))if(values[key])textKeys.set(values[key],['dynamic',key]);}
+for(const key of Object.keys(extended.ru)){for(const values of Object.values(extended))if(values[key])textKeys.set(values[key],['extended',key]);}
+for(const [key,value] of Object.entries(translations.ru)){for(const values of Object.values(translations))if(values[key])textKeys.set(values[key],['translations',key]);}
+
+// Explicit translations for status messages that are generated by the market runtime.
+const statusEnglish={
+'LIVE: подключение…':'LIVE: connecting…',
+'LIVE Binance · ожидание котировок':'LIVE Binance · waiting for quotes',
+'LIVE недоступен · CoinGecko':'LIVE unavailable · CoinGecko',
+'LIVE отключён · CoinGecko':'LIVE disconnected · CoinGecko',
+'Загрузка исторических агрегированных сделок Binance Spot…':'Loading Binance Spot historical aggregated trades…',
+'Биржевая пара не подтверждена: график отключён во избежание подмены актива':'Trading pair unverified: chart disabled to prevent asset mismatch',
+'Spot CVD недоступен: биржевая пара не подтверждена':'Spot CVD unavailable: trading pair unverified',
+'CoinGecko · биржевые данные отключены для неподтверждённой пары':'CoinGecko · exchange data disabled for unverified pair',
+'Нет данных':'No data',
+'Нет подтверждённых данных':'No verified data',
+'Не указаны':'Not specified',
+'Коммиты за 4 недели':'Commits over 4 weeks',
+'GitHub репозитории':'GitHub repositories',
+'Ссылки, заявленные проектом':'Links provided by project',
+'Участники разработки':'Development contributors',
+'Звёзды GitHub':'GitHub stars',
+'Подписчики Telegram':'Telegram followers',
+'FDV / капитализация':'FDV / market cap',
+'Оценка потенциального разводнения, не календарь разлоков':'Estimated potential dilution, not an unlock schedule',
+'Циркулирующее предложение':'Circulating supply',
+'Максимальная эмиссия':'Maximum supply',
+'Разлоки и крупные держатели':'Unlocks and large holders',
+'Не проверено':'Not verified',
+'Нужен специализированный источник':'Specialized data source required',
+'Фундаментальные данные недоступны (возможно ограничение API). Попробуйте позже.':'Fundamental data unavailable (possibly API restrictions). Try later.',
+'Рейтинг не рассчитан: нет подтверждённых данных.':'Score not calculated: no verified data.',
+'Нет подходящих монет':'No matching coins',
+'Проверить':'Inspect',
+'Топ-5 по капитализации':'Top 5 by market cap',
+'Топ-5 по росту за 24 часа':'Top 5 by 24h gains',
+'Топ-5 по падению за 24 часа':'Top 5 by 24h losses',
+'Сохранённые монеты на этом устройстве':'Coins saved on this device',
+'Каталог монет · по 20 за раз':'Coin catalog · 20 at a time',
+'Данные недоступны · повторите позже':'Data unavailable · try again later',
+'Данные ещё не загружены':'Data not loaded yet',
+'Обновление CoinGecko…':'Updating CoinGecko…',
+'CoinGecko недоступен · сохранены прежние данные':'CoinGecko unavailable · previous data retained',
+'BTC: Binance · каталог временно недоступен':'BTC: Binance · catalog temporarily unavailable',
+'Рыночные данные недоступны':'Market data unavailable',
+'LIVE приостановлен':'LIVE paused',
+'LIVE: котировки устарели · CoinGecko':'LIVE: quotes stale · CoinGecko',
+'Добавить в избранное':'Add to favorites',
+'Убрать из избранного':'Remove from favorites',
+'Показать ещё 20':'Show 20 more',
+'Обновить':'Refresh',
+'Проверяем ':'Checking ',
+'Загрузка Binance Spot · ':'Loading Binance Spot · ',
+'Показано ':'Showing ',
+' из ':' of ',
+' монет':' coins',
+' · частичный охват':' · partial coverage',
+' · данные могут устареть':' · data may be stale',
+' мин назад':' min ago',
+' ссылок':' links',
+' · повторная проверка через 24 ч':' · recheck in 24h'
+};
+Object.assign(extended.en,statusEnglish,{"Источники: CoinGecko (рынок), TradingView (график), Binance (сделки и деривативы). Рыночные данные CoinGecko обновляются приблизительно каждые 5 минут при открытой странице, если API доступен. Живые цены Binance обновляются отдельно.":"Sources: CoinGecko (market), TradingView (charts), Binance (trades and derivatives). CoinGecko market data refreshes about every 5 minutes while the page is open, if the API is available. Binance live quotes update separately.","Оценка перспективности не присвоена: наличие отдельных метрик не подтверждает активную команду, безопасность или будущий рост.":"No potential score assigned: individual metrics do not confirm an active team, security, or future growth.","Данные сторонних сервисов могут задерживаться или быть недоступны.":"Third-party data may be delayed or unavailable.","История сделок недоступна для ":"Trade history unavailable for ",". Возможно ограничение API, региона или отсутствие пары.":". This may be caused by API or regional restrictions, or an unavailable pair.","Загрузка исторических агрегированных сделок Binance Spot…":"Loading historical Binance Spot aggregated trades…","Биржевые данные":"Exchange data","Проверка проекта":"Project research","Наличие отдельных метрик не подтверждает будущий рост":"Individual metrics do not predict future growth"," · сохранены данные от ":" · retained data from ","Ошибка обновления · сохранены данные от ":"Update failed · retained data from ","CoinGecko · обновлено: ":"CoinGecko · updated: ","CoinGecko · проверено ":"CoinGecko · checked "," · повторная проверка через 24 ч":" · recheck in 24h","Загрузка Binance Spot · ":"Loading Binance Spot · "," свечей · ":" candles · "," агрегированных сделок · ":" aggregated trades · ","Показано ":"Showing "," из ":" of "," монет":" coins"," · частичный охват":" · partial coverage"," мин назад":" min ago"," · данные могут устареть":" · data may be stale","Не инвестиционная рекомендация. Данные сторонних сервисов могут задерживаться или быть недоступны.":"Not investment advice. Third-party data may be delayed or unavailable."});
+for(const [ru,en] of Object.entries(statusEnglish))textKeys.set(ru,['extended',ru]);
+
+function locale(){const v=document.getElementById('language')?.value;return v==='en'?'en':'ru'}
+function t(key,params={}){const code=locale();const value=catalog[code]?.[key]??catalog.en?.[key]??catalog.ru?.[key]??key;return String(value).replace(/\{(\w+)\}/g,(_,name)=>String(params[name]??''))}
+function translateFragments(source){if(locale()!=='en')return source;let result=source;const pieces=Object.entries({...statusEnglish,...{"Источники: CoinGecko (рынок), TradingView (график), Binance (сделки и деривативы). Рыночные данные CoinGecko обновляются приблизительно каждые 5 минут при открытой странице, если API доступен. Живые цены Binance обновляются отдельно.":"Sources: CoinGecko (market), TradingView (charts), Binance (trades and derivatives). CoinGecko market data refreshes about every 5 minutes while the page is open, if the API is available. Binance live quotes update separately.","Оценка перспективности не присвоена: наличие отдельных метрик не подтверждает активную команду, безопасность или будущий рост.":"No potential score assigned: individual metrics do not confirm an active team, security, or future growth.","Данные сторонних сервисов могут задерживаться или быть недоступны.":"Third-party data may be delayed or unavailable.","История сделок недоступна для ":"Trade history unavailable for ",". Возможно ограничение API, региона или отсутствие пары.":". This may be caused by API or regional restrictions, or an unavailable pair.","Загрузка исторических агрегированных сделок Binance Spot…":"Loading historical Binance Spot aggregated trades…","Биржевые данные":"Exchange data","Проверка проекта":"Project research","Наличие отдельных метрик не подтверждает будущий рост":"Individual metrics do not predict future growth"," · сохранены данные от ":" · retained data from ","Ошибка обновления · сохранены данные от ":"Update failed · retained data from ","CoinGecko · обновлено: ":"CoinGecko · updated: ","CoinGecko · проверено ":"CoinGecko · checked "," · повторная проверка через 24 ч":" · recheck in 24h","Загрузка Binance Spot · ":"Loading Binance Spot · "," свечей · ":" candles · "," агрегированных сделок · ":" aggregated trades · ","Показано ":"Showing "," из ":" of "," монет":" coins"," · частичный охват":" · partial coverage"," мин назад":" min ago"," · данные могут устареть":" · data may be stale","Не инвестиционная рекомендация. Данные сторонних сервисов могут задерживаться или быть недоступны.":"Not investment advice. Third-party data may be delayed or unavailable."}}).filter(([from])=>from.length>2).sort((a,b)=>b[0].length-a[0].length);for(const [from,to] of pieces){if(result.includes(from))result=result.split(from).join(to)}return result}
+function translateLiteral(source){const found=textKeys.get(source);if(!found)return translateFragments(source);const [type,key]=found;const code=locale();return ({translations,extended,dynamic})[type][code]?.[key]??source}
+function apply(){const code=locale();document.documentElement.lang=code;document.documentElement.dir=code==='ar'?'rtl':'ltr';
+document.querySelectorAll('[data-i]').forEach(el=>{const key=el.dataset.i;const value=fullLabels[code]?.[key]??translations[code]?.[key];if(value&&el.textContent!==value)el.textContent=value});
+for(const [key,[selector,prop]] of Object.entries(selectors)){const el=document.querySelector(selector);if(!el)continue;const value=translations[code]?.[key];if(!value)continue;if(prop==='placeholder')el.placeholder=value;else if(prop==='previousElementSibling'){const small=el.parentElement?.querySelector('small');if(small)small.textContent=value}else if(prop==='textContent'&&!['researchHint','top','notLoaded','loadingHistory'].includes(key)&&el.textContent!==value)el.textContent=value}
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(node.parentElement?.closest('script,style,option,[data-i]'))continue;const current=node.nodeValue,trim=current.trim();if(!trim)continue;const source=originalNodes.get(node)??trim;const translated=translateFragments(translateLiteral(source));if(translated!==source||originalNodes.has(node)){originalNodes.set(node,source);const next=current.replace(trim,translated);if(next!==current)node.nodeValue=next}}
+document.querySelectorAll('[aria-label]').forEach(el=>{const value=el.getAttribute('aria-label');const source=el.dataset.csAriaOriginal||value;const translated=translateLiteral(source);if(translated!==source){el.dataset.csAriaOriginal=source;el.setAttribute('aria-label',translated)}});
+}
+window.CSI18N=Object.freeze({t,apply,translateLiteral,catalog});
 window.CryptoScopeApplyLocale=apply;
 document.getElementById('language')?.addEventListener('change',()=>queueMicrotask(apply));
-let queued=false;new MutationObserver(()=>{if(busy||queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}).observe(document.body,{childList:true,subtree:true,characterData:true});
+let pending=false;new MutationObserver(()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;apply()})}).observe(document.body,{subtree:true,childList:true,characterData:true});
 apply();
 })();
