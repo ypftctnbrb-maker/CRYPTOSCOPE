@@ -25,6 +25,10 @@ jobs:
         run: node --check assets/app.js
       - name: Run static smoke checks
         run: node tests/smoke.cjs
+      - name: Run market behavior checks
+        run: |
+          node tests/behavior-chart-symbol.cjs
+          node tests/behavior-live.cjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Prepare restricted public artifact
