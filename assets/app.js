@@ -1,5 +1,177 @@
+const $=id=>document.getElementById(id);
+const VERIFIED_BINANCE_PAIRS=Object.freeze({
+  "bitcoin": "BTCUSDT",
+  "ethereum": "ETHUSDT",
+  "solana": "SOLUSDT",
+  "ripple": "XRPUSDT",
+  "binancecoin": "BNBUSDT",
+  "dogecoin": "DOGEUSDT",
+  "cardano": "ADAUSDT",
+  "tron": "TRXUSDT",
+  "chainlink": "LINKUSDT",
+  "avalanche-2": "AVAXUSDT",
+  "polkadot": "DOTUSDT",
+  "litecoin": "LTCUSDT",
+  "bitcoin-cash": "BCHUSDT",
+  "stellar": "XLMUSDT",
+  "uniswap": "UNIUSDT",
+  "aave": "AAVEUSDT",
+  "monero": "XMRUSDT",
+  "zcash": "ZECUSDT",
+  "pepe": "PEPEUSDT",
+  "near": "NEARUSDT",
+  "aptos": "APTUSDT",
+  "arbitrum": "ARBUSDT",
+  "optimism": "OPUSDT",
+  "sui": "SUIUSDT",
+  "ethena": "ENAUSDT",
+  "render-token": "RENDERUSDT"
+});
+const verifiedPair=c=>c&&VERIFIED_BINANCE_PAIRS[c.id]||null;
+const livePrices=new Map(),liveTimes=new Map();
+const livePairs=new Set(Object.values(VERIFIED_BINANCE_PAIRS));
+let liveSocket=null,liveRetry=1000,liveTimer=null,liveRenderTimer=null,liveLastMessage=0,liveStartedAt=0;
+const livePriceFor=c=>{
+  const pair=verifiedPair(c);
+  return pair&&Date.now()-liveLastMessage<15000&&Date.now()-(liveTimes.get(pair)||0)<15000?livePrices.get(pair):undefined;
+};
+const displayPrice=c=>{
+  const v=livePriceFor(c);
+  return Number.isFinite(v)?v:c.current_price;
+};
+function updateLiveStatus(message,ok) {
+  const el=$('liveStatus');
+  if(el) {
+    el.textContent=message;
+    el.classList.toggle('connected',!!ok);
+  }
+}
+function clearLiveQuotes() {
+  livePrices.clear();
+  liveTimes.clear();
+  liveLastMessage=0;
+  clearTimeout(liveRenderTimer);
+  liveRenderTimer=null;
+  refreshLiveValues();
+}
+function retryLive(socket,message) {
+  if(socket&&liveSocket!==socket)return;
+  liveSocket=null;
+  clearTimeout(liveTimer);
+  liveTimer=null;
+  clearLiveQuotes();
+  updateLiveStatus(message,false);
+  if(socket) {
+    try { socket.close(); } catch(e) { /* A failed transport is already detached. */ }
+  }
+  if(document.hidden)return;
+  liveTimer=setTimeout(connectLive,liveRetry);
+  liveRetry=Math.min(liveRetry*2,30000);
+}
+function pauseLive() {
+  const socket=liveSocket;
+  liveSocket=null;
+  clearTimeout(liveTimer);
+  liveTimer=null;
+  clearLiveQuotes();
+  if(socket) {
+    try { socket.close(); } catch(e) { /* No transport work while hidden. */ }
+  }
+  updateLiveStatus(csText('LIVE приостановлен'),false);
+}
+function connectLive() {
+  if(document.hidden)return;
+  if(liveSocket&&(liveSocket.readyState===0||liveSocket.readyState===1))return;
+  clearTimeout(liveTimer);
+  liveTimer=null;
+  liveStartedAt=Date.now();
+  clearLiveQuotes();
+  try {
+    const socket=new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
+    liveSocket=socket;
+    updateLiveStatus('LIVE: подключение…',false);
+    socket.onopen=()=>{
+      if(liveSocket!==socket)return;
+      updateLiveStatus('LIVE Binance · ожидание котировок',false);
+    };
+    socket.onmessage=e=>{
+      if(liveSocket!==socket)return;
+      let ticks;
+      try { ticks=JSON.parse(e.data); } catch(err) { return; }
+      if(!Array.isArray(ticks))return;
+      let changed=false;
+      const receivedAt=Date.now();
+      for(const t of ticks) {
+        if(!t||!livePairs.has(t.s))continue;
+        const p=Number(t.c);
+        if(!Number.isFinite(p)||p<=0)continue;
+        livePrices.set(t.s,p);
+        liveTimes.set(t.s,receivedAt);
+        changed=true;
+      }
+      if(!changed)return;
+      liveLastMessage=receivedAt;
+      liveRetry=1000;
+      updateLiveStatus('LIVE Binance · '+new Date(liveLastMessage).toLocaleTimeString(),true);
+      if(!liveRenderTimer)liveRenderTimer=setTimeout(()=>{
+        liveRenderTimer=null;
+        refreshLiveValues();
+      },500);
+    };
+    socket.onerror=()=>retryLive(socket,'LIVE недоступен · CoinGecko');
+    socket.onclose=()=>retryLive(socket,'LIVE отключён · CoinGecko');
+  } catch(e) {
+    retryLive(null,'LIVE недоступен · CoinGecko');
+  }
+}
+function checkLiveHealth() {
+  if(document.hidden)return;
+  if(liveSocket&&Date.now()-(liveLastMessage||liveStartedAt)>=15000) {
+    retryLive(liveSocket,csText('LIVE: котировки устарели · CoinGecko'));
+  }
+  refreshLiveValues();
+}
+function livePriceTitle(c) {
+  if(Number.isFinite(livePriceFor(c))) {
+    return 'Binance Spot · '+verifiedPair(c)+' · '+new Date(liveTimes.get(verifiedPair(c))).toLocaleTimeString();
+  }
+  const time=lastMarketSuccess?new Date(lastMarketSuccess).toLocaleTimeString()+' · возможна задержка':'время неизвестно';
+  return 'CoinGecko · '+time;
+}
+function refreshLiveValues() {
+  const btc=coins.find(c=>c.id==='bitcoin');
+  if(btc) {
+    $('btc').textContent=usd(displayPrice(btc));
+    $('btc').title=livePriceTitle(btc);
+  }
+  for(const id of ['major','small']) {
+    const body=$(id);
+    if(!body)continue;
+    body.querySelectorAll('tr[data-id]').forEach(tr=>{
+      const c=coins.find(x=>x.id===tr.dataset.id);
+      if(!c)return;
+      const price=livePriceFor(c);
+      const cell=tr.cells[1];
+      if(cell) {
+        cell.textContent=usd(displayPrice(c));
+        cell.title=livePriceTitle(c);
+        cell.classList.toggle('live-price',Number.isFinite(price));
+      }
+    });
+  }
+  if(selectedCoinId) {
+    const c=coins.find(x=>x.id===selectedCoinId);
+    if(c) {
+      $('dPrice').textContent=usd(displayPrice(c));
+      $('dPrice').title=livePriceTitle(c);
+    }
+  }
+}
+const fmt=(n,d=2)=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{maximumFractionDigits:d}).format(n):'—';
+const usd=n=>Number.isFinite(n)?'$'+fmt(n,n<1?6:2):'—';
+const compact=n=>Number.isFinite(n)?'$'+new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(n):'—';
+let coins=[];
 
-const $=id=>document.getElementById(id);const VERIFIED_BINANCE_PAIRS=Object.freeze({"bitcoin":"BTCUSDT","ethereum":"ETHUSDT","solana":"SOLUSDT","ripple":"XRPUSDT","binancecoin":"BNBUSDT","dogecoin":"DOGEUSDT","cardano":"ADAUSDT","tron":"TRXUSDT","chainlink":"LINKUSDT","avalanche-2":"AVAXUSDT","polkadot":"DOTUSDT","litecoin":"LTCUSDT","bitcoin-cash":"BCHUSDT","stellar":"XLMUSDT","uniswap":"UNIUSDT","aave":"AAVEUSDT","monero":"XMRUSDT","zcash":"ZECUSDT","pepe":"PEPEUSDT","near":"NEARUSDT","aptos":"APTUSDT","arbitrum":"ARBUSDT","optimism":"OPUSDT","sui":"SUIUSDT","ethena":"ENAUSDT","render-token":"RENDERUSDT"});const verifiedPair=c=>c&&VERIFIED_BINANCE_PAIRS[c.id]||null;const livePrices=new Map();let liveSocket=null,liveRetry=1000,liveTimer=null,liveRenderTimer=null,liveLastMessage=0;const livePriceFor=c=>{const pair=verifiedPair(c);return pair&&Date.now()-liveLastMessage<15000?livePrices.get(pair):undefined};const displayPrice=c=>{const v=livePriceFor(c);return Number.isFinite(v)?v:c.current_price};function updateLiveStatus(message,ok){const el=$('liveStatus');if(el){el.textContent=message;el.classList.toggle('connected',!!ok)}}function connectLive(){if(document.hidden)return;if(liveSocket&&(liveSocket.readyState===0||liveSocket.readyState===1))return;clearTimeout(liveTimer);try{const socket=new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');liveSocket=socket;updateLiveStatus('LIVE: подключение…',false);socket.onopen=()=>{if(liveSocket!==socket)return;liveRetry=1000;updateLiveStatus('LIVE Binance · ожидание котировок',true)};socket.onmessage=e=>{if(liveSocket!==socket)return;let ticks;try{ticks=JSON.parse(e.data)}catch(err){return}if(!Array.isArray(ticks))return;let changed=false;for(const t of ticks){if(typeof t.s!=='string'||!t.s.endsWith('USDT'))continue;const p=Number(t.c);if(!Number.isFinite(p)||p<=0)continue;livePrices.set(t.s,p);changed=true}if(!changed)return;liveLastMessage=Date.now();updateLiveStatus('LIVE Binance · '+new Date(liveLastMessage).toLocaleTimeString(),true);if(!liveRenderTimer)liveRenderTimer=setTimeout(()=>{liveRenderTimer=null;refreshLiveValues()},500)};socket.onerror=()=>{if(liveSocket===socket)updateLiveStatus('LIVE недоступен · CoinGecko',false)};socket.onclose=()=>{if(liveSocket!==socket)return;liveSocket=null;updateLiveStatus('LIVE отключён · CoinGecko',false);liveTimer=setTimeout(connectLive,liveRetry);liveRetry=Math.min(liveRetry*2,30000)}}catch(e){updateLiveStatus('LIVE недоступен · CoinGecko',false);liveTimer=setTimeout(connectLive,liveRetry)}}function refreshLiveValues(){const btc=coins.find(c=>c.id==='bitcoin');if(btc){$('btc').textContent=usd(displayPrice(btc));$('btc').title=Number.isFinite(livePriceFor(btc))?'Binance Spot · '+new Date(liveLastMessage).toLocaleTimeString():'CoinGecko · '+(lastMarketSuccess?new Date(lastMarketSuccess).toLocaleTimeString()+' (возможна задержка)':'время неизвестно')}for(const id of ['major','small']){const body=$(id);if(!body)continue;body.querySelectorAll('tr[data-id]').forEach(tr=>{const c=coins.find(x=>x.id===tr.dataset.id);if(!c)return;const price=livePriceFor(c);const cell=tr.cells[1];if(cell){cell.textContent=usd(displayPrice(c));cell.title=Number.isFinite(price)?'Binance Spot · '+verifiedPair(c)+' · '+new Date(liveLastMessage).toLocaleTimeString():'CoinGecko · '+(lastMarketSuccess?new Date(lastMarketSuccess).toLocaleTimeString()+' · возможна задержка':'время неизвестно');cell.classList.toggle('live-price',Number.isFinite(price))}})}if(selectedCoinId){const c=coins.find(x=>x.id===selectedCoinId);if(c){$('dPrice').textContent=usd(displayPrice(c));$('dPrice').title=Number.isFinite(livePriceFor(c))?'Binance Spot':'CoinGecko · возможна задержка'}}}const fmt=(n,d=2)=>Number.isFinite(n)?new Intl.NumberFormat('en-US',{maximumFractionDigits:d}).format(n):'—';const usd=n=>Number.isFinite(n)?'$'+fmt(n,n<1?6:2):'—';const compact=n=>Number.isFinite(n)?'$'+new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(n):'—';let coins=[];
 const dict={ru:{title:'Рынок в реальном времени',subtitle:'Цены, объёмы, потоки сделок и деривативы',chart:'График',markets:'Рынок',prospects:'Перспективные',btcCap:'Капитализация BTC',btcVolume:'Объём BTC за 24 ч',candle:'BTC / USDT · TradingView',marketTitle:'Крупные монеты · от $200 млн',prospectTitle:'Монеты с потенциалом роста',prospectSub:'Кандидаты для изучения. Рыночный интерес не подтверждает активность команды и качество токеномики.',refresh:'Обновить',coin:'Монета',price:'Цена',cap:'Капитализация',volume:'Объём 24 ч',fVolume:'Объём / капитализация от 10%',fWhales:'Накопление крупных держателей · скоро',fUnlock:'Эмиссия и разлоки · скоро',fOi:'Открытый интерес · скоро',fDev:'Активность разработчиков · скоро',fLiquidity:'Объём торгов от $1 млн / 24 ч',coverage:'Охват ограничен загруженными страницами API. Отсутствие монеты не означает, что она не соответствует критериям.',risk:'Не инвестиционная рекомендация. Данные сторонних сервисов могут задерживаться или быть недоступны.'}};
 function csText(value){return value}
 function translate(){document.documentElement.lang='ru';document.documentElement.dir='ltr';document.querySelectorAll('[data-i]').forEach(el=>{const value=dict.ru[el.dataset.i];if(value)el.textContent=value});render()}
@@ -63,4 +235,67 @@ async function getJson(url){const controller=new AbortController();const timeout
 function btcUpdate(c){$('btc').textContent=usd(displayPrice(c));$('btcCap').textContent=compact(c.market_cap);$('btcVolume').textContent=compact(c.total_volume);const p=c.price_change_percentage_24h;$('btcChange').textContent='24h: '+(Number.isFinite(p)?(p>0?'+':'')+fmt(p)+'%':'—');$('btcChange').className=p>=0?'positive':'negative'}
 let marketLoadPending=false,lastMarketSuccess=0,lastMarketAttempt=0,marketRetryAt=0,marketFailures=0;function updatePotentialTimestamp(error=false){const el=$('potentialUpdated');if(!el)return;if(!lastMarketSuccess){el.textContent=error?csText('Данные недоступны · повторите позже'):csText('Данные ещё не загружены');return}const age=Math.round((Date.now()-lastMarketSuccess)/60000);el.textContent=(error?csText('Ошибка обновления · сохранены данные от '):csText('CoinGecko · обновлено: '))+new Date(lastMarketSuccess).toLocaleTimeString()+(age>5?' · '+age+csText(' мин назад'):'')+(age>10?csText(' · данные могут устареть'):'')}async function load(force=false){if(marketLoadPending||(!force&&Date.now()<marketRetryAt))return;lastMarketAttempt=Date.now();marketLoadPending=true;const status=$('status');status.textContent=csText('Обновление CoinGecko…');try{const pages=await Promise.allSettled([1,2,3,4].map(page=>getJson('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page='+page+'&sparkline=false&price_change_percentage=24h')));const good=pages.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length>0);if(!good.length)throw Error('No market pages');if(good.length<4){throw Error('Partial CoinGecko market response: '+good.length+'/4 pages')}const map=new Map();good.forEach(x=>x.value.forEach(c=>{if(c&&typeof c.id==='string')map.set(c.id,c)}));if(!map.size)throw Error('No market assets');coins=[...map.values()];lastMarketSuccess=Date.now();marketFailures=0;marketRetryAt=lastMarketSuccess+300000;const btc=coins.find(c=>c.id==='bitcoin');if(btc)btcUpdate(btc);render();if(selectedCoinId&&coins.some(c=>c.id===selectedCoinId))openCoin(selectedCoinId,true);else if(btc&&!$('search').value.trim())openCoin(btc.id);status.textContent='CoinGecko · '+new Date(lastMarketSuccess).toLocaleTimeString()+' · '+coins.length+csText(' монет')+(good.length<4?csText(' · частичный охват'):'');$('dot').classList.add('ok');updatePotentialTimestamp();refreshLiveValues()}catch(e){console.warn('CoinGecko refresh failed',e);marketFailures++;marketRetryAt=Date.now()+Math.min(900000,30000*2**Math.min(marketFailures-1,5))*(0.8+Math.random()*0.4);updatePotentialTimestamp(true);if(coins.length){status.textContent=csText('CoinGecko недоступен · сохранены прежние данные');return}try{const t=await getJson('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');$('btc').textContent=usd(Number(t.lastPrice));$('btcChange').textContent='24h: '+fmt(Number(t.priceChangePercent))+'%';status.textContent='BTC: Binance · каталог временно недоступен';$('dot').classList.add('ok')}catch(err){status.textContent=csText('Рыночные данные недоступны')}}finally{marketLoadPending=false}}
 
-$('cvdWindow').addEventListener('change',()=>{if(lastSpotSymbol&&selectedCoinId)loadTrades(lastSpotSymbol,selectedCoinId)});$('marketTabs').addEventListener('click',e=>{const b=e.target.closest('button[data-market-tab]');if(!b)return;marketTab=b.dataset.marketTab;majorShown=marketTab==='all'?20:marketTab==='favorites'?20:5;render();document.getElementById('marketHint').scrollIntoView({behavior:'smooth',block:'center'})});$('majorMore').addEventListener('click',()=>{majorShown+=20;render()});$('smallMore').addEventListener('click',()=>{smallShown+=20;render()});let searchTimer;$('search').addEventListener('input',()=>{render();clearTimeout(searchTimer);const q=$('search').value.trim().toLowerCase();if(!q){const btc=coins.find(c=>c.id==='bitcoin');if(btc)openCoin(btc.id);return}searchTimer=setTimeout(()=>{const matches=coins.filter(c=>c.symbol.toLowerCase()===q||c.name.toLowerCase()===q);const candidate=matches[0]||coins.filter(c=>c.symbol.toLowerCase().startsWith(q)||c.name.toLowerCase().startsWith(q)).sort((a,b)=>(b.market_cap||0)-(a.market_cap||0))[0];if(candidate)openCoin(candidate.id);else{lastSpotSymbol='';selectedCoinId='';detailRequest++;$('coinDetail').hidden=true;coinRequest++}},450)});$('sort').addEventListener('change',render);$('volGrowth').addEventListener('change',render);$('liquidity').addEventListener('change',render);$('refresh').addEventListener('click',()=>load(true));$('potentialRefresh').addEventListener('click',load);document.querySelectorAll('#major,#small').forEach(t=>t.addEventListener('click',e=>{const research=e.target.closest('button[data-research]');if(research){inspectPotential(research.dataset.research);return}const star=e.target.closest('button[data-favorite]');if(star){const id=star.dataset.favorite;if(favoriteIds.has(id))favoriteIds.delete(id);else favoriteIds.add(id);saveFavorites();render();return}const tr=e.target.closest('tr[data-id]');if(tr){$('search').value=coins.find(c=>c.id===tr.dataset.id)?.symbol.toUpperCase()||'';openCoin(tr.dataset.id);$('coinDetail').scrollIntoView({behavior:'smooth',block:'start'})}}));$('closeDetail').addEventListener('click',()=>{coinRequest++;detailRequest++;selectedCoinId='';lastSpotSymbol='';chartSeq++;chartSymbol='';$('coinDetail').hidden=true;$('detailChart').src='about:blank'});translate();load();connectLive();document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(liveTimer);if(liveSocket){const s=liveSocket;liveSocket=null;s.close()}updateLiveStatus(csText('LIVE приостановлен'),false)}else{connectLive();if(Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load()}});setInterval(()=>{updatePotentialTimestamp();if(!document.hidden&&Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load();if(!document.hidden&&liveLastMessage&&Date.now()-liveLastMessage>15000){updateLiveStatus(csText('LIVE: котировки устарели · CoinGecko'),false);refreshLiveValues()}},5000);
+$('cvdWindow').addEventListener('change',()=>{if(lastSpotSymbol&&selectedCoinId)loadTrades(lastSpotSymbol,selectedCoinId)});
+$('marketTabs').addEventListener('click',e=>{const b=e.target.closest('button[data-market-tab]');
+if(!b)return;
+marketTab=b.dataset.marketTab;
+majorShown=marketTab==='all'?20:marketTab==='favorites'?20:5;
+render();
+document.getElementById('marketHint').scrollIntoView({behavior:'smooth',block:'center'})});
+$('majorMore').addEventListener('click',()=>{majorShown+=20;
+render()});
+$('smallMore').addEventListener('click',()=>{smallShown+=20;
+render()});
+let searchTimer;
+$('search').addEventListener('input',()=>{render();
+clearTimeout(searchTimer);
+const q=$('search').value.trim().toLowerCase();
+if(!q){const btc=coins.find(c=>c.id==='bitcoin');
+if(btc)openCoin(btc.id);
+return}searchTimer=setTimeout(()=>{const matches=coins.filter(c=>c.symbol.toLowerCase()===q||c.name.toLowerCase()===q);
+const candidate=matches[0]||
+  coins.filter(c=>c.symbol.toLowerCase().startsWith(q)||c.name.toLowerCase().startsWith(q)).sort((a,b)=>(b.market_cap||0)-(a.market_cap||0))[0];
+if(candidate)openCoin(candidate.id);
+else{lastSpotSymbol='';
+selectedCoinId='';
+detailRequest++;
+$('coinDetail').hidden=true;
+coinRequest++}},450)});
+$('sort').addEventListener('change',render);
+$('volGrowth').addEventListener('change',render);
+$('liquidity').addEventListener('change',render);
+$('refresh').addEventListener('click',()=>load(true));
+$('potentialRefresh').addEventListener('click',load);
+document.querySelectorAll('#major,#small').forEach(t=>t.addEventListener('click',e=>{const research=e.target.closest('button[data-research]');
+if(research){inspectPotential(research.dataset.research);
+return}const star=e.target.closest('button[data-favorite]');
+if(star){const id=star.dataset.favorite;
+if(favoriteIds.has(id))favoriteIds.delete(id);
+else favoriteIds.add(id);
+saveFavorites();
+render();
+return}const tr=e.target.closest('tr[data-id]');
+if(tr){$('search').value=coins.find(c=>c.id===tr.dataset.id)?.symbol.toUpperCase()||'';
+openCoin(tr.dataset.id);
+$('coinDetail').scrollIntoView({behavior:'smooth',block:'start'})}}));
+$('closeDetail').addEventListener('click',()=>{coinRequest++;
+detailRequest++;
+selectedCoinId='';
+lastSpotSymbol='';
+chartSeq++;
+chartSymbol='';
+$('coinDetail').hidden=true;
+$('detailChart').src='about:blank'});
+translate();
+load();
+connectLive();
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseLive()}
+else{connectLive();
+
+if(Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load()}});
+
+setInterval(()=>{updatePotentialTimestamp();
+
+if(!document.hidden&&Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load();
+
+checkLiveHealth()},5000);
