@@ -11,7 +11,7 @@ const end = source.indexOf('return}', start);
 assert.ok(start >= 0 && end > start, 'Unverified-pair branch must exist');
 const branch = source.slice(start, end + 'return}'.length);
 const handlerStart = source.indexOf("$('timeframes').addEventListener('click',");
-const handlerEnd = source.indexOf(';', handlerStart);
+const handlerEnd = source.indexOf('});', handlerStart) + 2;
 assert.ok(handlerStart >= 0 && handlerEnd > handlerStart, 'Timeframe handler must exist');
 const handler = source.slice(handlerStart, handlerEnd + 1);
 
