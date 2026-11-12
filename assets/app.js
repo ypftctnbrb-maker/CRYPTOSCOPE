@@ -279,7 +279,12 @@ async function load(force=false) {
   const now=Date.now();
   if(marketLoadPending)return;
   if(now<coinGeckoRetryAt||((!force||marketFailures>0)&&now<marketRetryAt)) {
-    if(force)$('status').textContent='CoinGecko: повтор после '+new Date(Math.max(coinGeckoRetryAt,marketRetryAt)).toLocaleTimeString();
+    if(force) {
+      const message='CoinGecko: повтор после '+new Date(Math.max(coinGeckoRetryAt,marketRetryAt)).toLocaleTimeString();
+      $('status').textContent=message;
+      const updated=$('potentialUpdated');
+      if(updated)updated.textContent=message+(lastMarketSuccess?' · данные от '+new Date(lastMarketSuccess).toLocaleTimeString():'');
+    }
     return;
   }
   lastMarketAttempt=Date.now();

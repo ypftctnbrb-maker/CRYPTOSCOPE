@@ -157,11 +157,30 @@ test('a longer cooldown is honored and existing prices survive 429', async () =>
   assert.equal(b.marketCalls(), 4, 'Server deadline must not be capped by the local 15-minute backoff');
 });
 
-test('blocked manual refresh explains when CoinGecko can retry', async () => {
-  const b = browser({ retryAfter: '900' });
+test('both blocked refresh buttons explain retry time beside the potential list', async () => {
+  for (const status of [429, 500]) {
+    const b = browser({ retryAfter: '900', status });
+    await flush();
+    for (const id of ['refresh', 'potentialRefresh']) {
+      b.element('status').textContent = 'Waiting';
+      b.element('potentialUpdated').textContent = 'Waiting';
+      await b.click(id);
+      const message = b.element('status').textContent;
+      assert.match(message, /повтор после/);
+      assert.equal(b.element('potentialUpdated').textContent, message);
+      assert.equal(b.marketCalls(), 4, `${id} must not bypass HTTP ${status} backoff`);
+    }
+  }
+});
+
+test('blocked refresh keeps the saved data time and does not duplicate feedback', async () => {
+  const b = browser();
   await flush();
-  b.element('status').textContent = 'Waiting';
-  await b.click('potentialRefresh');
-  assert.match(b.element('status').textContent, /повтор после/);
+  b.run('lastMarketSuccess=Date.now()-60000');
+  for (let i = 0; i < 3; i++) await b.click('potentialRefresh');
+  const message = b.element('potentialUpdated').textContent;
+  assert.match(message, /повтор после/);
+  assert.match(message, /данные от/);
+  assert.equal(message.split('повтор после').length, 2);
   assert.equal(b.marketCalls(), 4);
 });
