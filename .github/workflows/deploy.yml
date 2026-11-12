@@ -29,6 +29,7 @@ jobs:
         run: |
           node tests/behavior-chart-symbol.cjs
           node tests/behavior-live.cjs
+          node --test tests/behavior-market-retry.cjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Prepare restricted public artifact
