@@ -156,3 +156,12 @@ test('a longer cooldown is honored and existing prices survive 429', async () =>
   await b.run('load(true)');
   assert.equal(b.marketCalls(), 4, 'Server deadline must not be capped by the local 15-minute backoff');
 });
+
+test('blocked manual refresh explains when CoinGecko can retry', async () => {
+  const b = browser({ retryAfter: '900' });
+  await flush();
+  b.element('status').textContent = 'Waiting';
+  await b.click('potentialRefresh');
+  assert.match(b.element('status').textContent, /повтор после/);
+  assert.equal(b.marketCalls(), 4);
+});
