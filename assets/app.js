@@ -241,7 +241,7 @@ function rateLimitError(retryAt) {
 function coinGeckoDeadline(value,now) {
   const raw=String(value||'').trim();
   const parsed=/^\d+$/.test(raw)?now+Number(raw)*1000:Date.parse(raw);
-  return Number.isFinite(parsed)&&parsed<=8640000000000000?Math.max(now+30000,parsed):now+30000;
+  return Number.isFinite(parsed)&&parsed<=8640000000000000?Math.min(now+7200000,Math.max(now+30000,parsed)):now+30000;
 }
 async function getJson(url) {
   const isCoinGecko=url.startsWith('https://api.coingecko.com/');
