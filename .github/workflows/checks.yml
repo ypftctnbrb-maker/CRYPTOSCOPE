@@ -18,3 +18,5 @@ jobs:
       - run: node tests/smoke.cjs
       - run: node tests/behavior-chart-symbol.cjs
       - run: node tests/behavior-live.cjs
+      - run: node --test tests/claude-bridge.test.cjs
+
