@@ -231,9 +231,106 @@ async function openCoin(id, force=false) {
 }
 const researchCache=new Map();let researchSeq=0;const researchNumber=n=>Number.isFinite(Number(n))&&n!==null?fmt(Number(n),0):'Нет данных';const safeExternal=u=>{try{const x=new URL(u);return x.protocol==='https:'?x.href:''}catch(e){return ''}};async function inspectPotential(id){const c=coins.find(x=>x.id===id);if(!c)return;const seq=++researchSeq;const panel=$('fundamentalPanel'),body=$('fundamentalContent'),status=$('fundamentalStatus');panel.hidden=false;panel.scrollIntoView({behavior:'smooth',block:'start'});body.textContent='';status.textContent=csText('Проверяем ')+c.name+'…';try{let entry=researchCache.get(id);if(!entry||Date.now()-entry.time>86400000){const data=await getJson('https://api.coingecko.com/api/v3/coins/'+encodeURIComponent(id)+'?localization=false&tickers=false&market_data=true&community_data=true&developer_data=true&sparkline=false');entry={data,time:Date.now()};researchCache.set(id,entry)}if(seq!==researchSeq)return;const d=entry.data,dev=d.developer_data||{},community=d.community_data||{},supply=d.market_data||{},links=d.links||{};const commits=Number.isFinite(dev.commit_count_4_weeks)?dev.commit_count_4_weeks:null;const fdv=supply.fully_diluted_valuation?.usd;const cap=supply.market_cap?.usd;const github=(links.repos_url?.github||[]).map(safeExternal).filter(Boolean);const ratio=Number.isFinite(fdv)&&Number.isFinite(cap)&&cap>0?fdv/cap:null;const items=[['Коммиты за 4 недели',commits===null?'Нет данных':fmt(commits,0),commits!==null?'CoinGecko · developer_data':'Нет подтверждённых данных'],['GitHub репозитории',github.length?github.length+' ссылок':'Не указаны','Ссылки, заявленные проектом'],['Участники разработки',researchNumber(dev.pull_request_contributors),'CoinGecko · developer_data'],['Звёзды GitHub',researchNumber(dev.stars),'CoinGecko · developer_data'],['Подписчики Telegram',researchNumber(community.telegram_channel_user_count),'CoinGecko · community_data'],['FDV / капитализация',ratio!==null?fmt(ratio,2)+'×':'Нет данных','Оценка потенциального разводнения, не календарь разлоков'],['Циркулирующее предложение',researchNumber(supply.circulating_supply),'CoinGecko · market_data'],['Максимальная эмиссия',researchNumber(supply.max_supply),'CoinGecko · market_data'],['Разлоки и крупные держатели','Не проверено','Нужен специализированный источник']];body.innerHTML='<h4>'+escapeHtml(c.name)+' ('+escapeHtml(c.symbol.toUpperCase())+')</h4><div class="fundamental-grid">'+items.map(([label,value,source])=>'<div class="metric"><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(value)+'</strong><span class="flowlegend">'+escapeHtml(source)+'</span></div>').join('')+'</div>'+(github.length?'<div class="fundamental-links">GitHub: '+github.slice(0,3).map(u=>'<a target="_blank" rel="noopener noreferrer" href="'+escapeHtml(u)+'">'+escapeHtml(new URL(u).pathname.slice(1))+'</a>').join(' · ')+'</div>':'')+'<p class="note">Оценка перспективности не присвоена: наличие отдельных метрик не подтверждает активную команду, безопасность или будущий рост.</p>';status.textContent=csText('CoinGecko · проверено ')+new Date(entry.time).toLocaleString()+csText(' · повторная проверка через 24 ч')}catch(e){if(seq!==researchSeq)return;status.textContent='Фундаментальные данные недоступны (возможно ограничение API). Попробуйте позже.';body.textContent='Рейтинг не рассчитан: нет подтверждённых данных.'}}
 let marketTab='leaders',majorShown=5,smallShown=5;let favoriteIds=new Set();try{const stored=JSON.parse(localStorage.getItem('cs-favorites')||'[]');if(Array.isArray(stored))favoriteIds=new Set(stored.filter(x=>typeof x==='string').slice(0,300))}catch(e){}function saveFavorites(){try{localStorage.setItem('cs-favorites',JSON.stringify([...favoriteIds]))}catch(e){}}function rowWithFavorite(c){const r=row(c);return r.replace('</tr>','<td class="favorite-cell"><button class="favorite-toggle'+(favoriteIds.has(c.id)?' is-favorite':'')+'" data-favorite="'+escapeHtml(c.id)+'" aria-label="'+(favoriteIds.has(c.id)?'Убрать из избранного':'Добавить в избранное')+'" aria-pressed="'+favoriteIds.has(c.id)+'">'+(favoriteIds.has(c.id)?'★':'☆')+'</button></td></tr>')}function render(){const query=$('search').value.toLowerCase().trim(),sort=$('sort').value;const base=coins.filter(c=>(c.name+' '+c.symbol).toLowerCase().includes(query));const numeric=(c,k)=>Number.isFinite(Number(c[k]))?Number(c[k]):-Infinity;const sorted=base.sort((a,b)=>numeric(b,sort)-numeric(a,sort));let major=sorted.filter(c=>c.market_cap>=200e6);if(marketTab==='gainers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h>0).sort((a,b)=>b.price_change_percentage_24h-a.price_change_percentage_24h);if(marketTab==='losers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h<0).sort((a,b)=>a.price_change_percentage_24h-b.price_change_percentage_24h);if(marketTab==='favorites')major=sorted.filter(c=>favoriteIds.has(c.id));const small=sorted.filter(c=>c.market_cap>=20e6&&c.market_cap<200e6&&Number.isFinite(c.total_volume)&&c.total_volume>=1e6&&c.market_cap>0&&c.total_volume/c.market_cap>=.1);const shownMajor=major.slice(0,majorShown),shownSmall=small.slice(0,smallShown);$('major').innerHTML=shownMajor.length?shownMajor.map(rowWithFavorite).join(''):'<tr><td colspan="6" class="loading">Нет подходящих монет</td></tr>';$('small').innerHTML=shownSmall.length?shownSmall.map(c=>rowWithFavorite(c).replace('</tr>','<td class="research-cell"><button class="research-button" data-research="'+escapeHtml(c.id)+'">Проверить</button></td></tr>')).join(''):'<tr><td colspan="7" class="loading">Нет подходящих монет</td></tr>';$('majorMore').hidden=majorShown>=major.length||marketTab!=='all';$('smallMore').hidden=smallShown>=small.length;$('majorCount').textContent=csText('Показано ')+shownMajor.length+csText(' из ')+major.length;$('smallCount').textContent=csText('Показано ')+shownSmall.length+csText(' из ')+small.length;$('marketHint').textContent=({leaders:csText('Топ-5 по капитализации'),gainers:csText('Топ-5 по росту за 24 часа'),losers:csText('Топ-5 по падению за 24 часа'),favorites:csText('Сохранённые монеты на этом устройстве'),all:csText('Каталог монет · по 20 за раз')})[marketTab];document.querySelectorAll('#marketTabs button').forEach(btn=>{const active=btn.dataset.marketTab===marketTab;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});if(window.CSI18N)window.CSI18N.apply()}
-async function getJson(url){const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),10000);try{const r=await fetch(url,{signal:controller.signal,headers:{accept:'application/json'}});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(timeout)}}
+let coinGeckoRetryAt=0;
+function rateLimitError(retryAt) {
+  const error=new Error('HTTP 429: CoinGecko cooldown');
+  error.status=429;
+  error.retryAt=retryAt;
+  return error;
+}
+function coinGeckoDeadline(value,now) {
+  const raw=String(value||'').trim();
+  const parsed=/^\d+$/.test(raw)?now+Number(raw)*1000:Date.parse(raw);
+  return Number.isFinite(parsed)&&parsed<=8640000000000000?Math.max(now+30000,parsed):now+30000;
+}
+async function getJson(url) {
+  const isCoinGecko=url.startsWith('https://api.coingecko.com/');
+  if(isCoinGecko&&Date.now()<coinGeckoRetryAt)throw rateLimitError(coinGeckoRetryAt);
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),10000);
+  try {
+    const r=await fetch(url,{signal:controller.signal,headers:{accept:'application/json'}});
+    if(isCoinGecko&&r.status===429) {
+      const deadline=coinGeckoDeadline(r.headers?.get('Retry-After'),Date.now());
+      coinGeckoRetryAt=Math.max(coinGeckoRetryAt,deadline);
+      throw rateLimitError(coinGeckoRetryAt);
+    }
+    if(!r.ok)throw Error('HTTP '+r.status);
+    return await r.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 function btcUpdate(c){$('btc').textContent=usd(displayPrice(c));$('btcCap').textContent=compact(c.market_cap);$('btcVolume').textContent=compact(c.total_volume);const p=c.price_change_percentage_24h;$('btcChange').textContent='24h: '+(Number.isFinite(p)?(p>0?'+':'')+fmt(p)+'%':'—');$('btcChange').className=p>=0?'positive':'negative'}
-let marketLoadPending=false,lastMarketSuccess=0,lastMarketAttempt=0,marketRetryAt=0,marketFailures=0;function updatePotentialTimestamp(error=false){const el=$('potentialUpdated');if(!el)return;if(!lastMarketSuccess){el.textContent=error?csText('Данные недоступны · повторите позже'):csText('Данные ещё не загружены');return}const age=Math.round((Date.now()-lastMarketSuccess)/60000);el.textContent=(error?csText('Ошибка обновления · сохранены данные от '):csText('CoinGecko · обновлено: '))+new Date(lastMarketSuccess).toLocaleTimeString()+(age>5?' · '+age+csText(' мин назад'):'')+(age>10?csText(' · данные могут устареть'):'')}async function load(force=false){if(marketLoadPending||(!force&&Date.now()<marketRetryAt))return;lastMarketAttempt=Date.now();marketLoadPending=true;const status=$('status');status.textContent=csText('Обновление CoinGecko…');try{const pages=await Promise.allSettled([1,2,3,4].map(page=>getJson('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page='+page+'&sparkline=false&price_change_percentage=24h')));const good=pages.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length>0);if(!good.length)throw Error('No market pages');if(good.length<4){throw Error('Partial CoinGecko market response: '+good.length+'/4 pages')}const map=new Map();good.forEach(x=>x.value.forEach(c=>{if(c&&typeof c.id==='string')map.set(c.id,c)}));if(!map.size)throw Error('No market assets');coins=[...map.values()];lastMarketSuccess=Date.now();marketFailures=0;marketRetryAt=lastMarketSuccess+300000;const btc=coins.find(c=>c.id==='bitcoin');if(btc)btcUpdate(btc);render();if(selectedCoinId&&coins.some(c=>c.id===selectedCoinId))openCoin(selectedCoinId,true);else if(btc&&!$('search').value.trim())openCoin(btc.id);status.textContent='CoinGecko · '+new Date(lastMarketSuccess).toLocaleTimeString()+' · '+coins.length+csText(' монет')+(good.length<4?csText(' · частичный охват'):'');$('dot').classList.add('ok');updatePotentialTimestamp();refreshLiveValues()}catch(e){console.warn('CoinGecko refresh failed',e);marketFailures++;marketRetryAt=Date.now()+Math.min(900000,30000*2**Math.min(marketFailures-1,5))*(0.8+Math.random()*0.4);updatePotentialTimestamp(true);if(coins.length){status.textContent=csText('CoinGecko недоступен · сохранены прежние данные');return}try{const t=await getJson('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');$('btc').textContent=usd(Number(t.lastPrice));$('btcChange').textContent='24h: '+fmt(Number(t.priceChangePercent))+'%';status.textContent='BTC: Binance · каталог временно недоступен';$('dot').classList.add('ok')}catch(err){status.textContent=csText('Рыночные данные недоступны')}}finally{marketLoadPending=false}}
+let marketLoadPending=false,lastMarketSuccess=0,lastMarketAttempt=0,marketRetryAt=0,marketFailures=0;
+function updatePotentialTimestamp(error=false) {
+  const el=$('potentialUpdated');
+  if(!el)return;
+  if(!lastMarketSuccess) {
+    el.textContent=error?csText('Данные недоступны · повторите позже'):csText('Данные ещё не загружены');
+    return;
+  }
+  const age=Math.round((Date.now()-lastMarketSuccess)/60000);
+  el.textContent=(error?csText('Ошибка обновления · сохранены данные от '):csText('CoinGecko · обновлено: '))+
+    new Date(lastMarketSuccess).toLocaleTimeString()+(age>5?' · '+age+csText(' мин назад'):'')+
+    (age>10?csText(' · данные могут устареть'):'');
+}
+async function load(force=false) {
+  const now=Date.now();
+  if(marketLoadPending||now<coinGeckoRetryAt||((!force||marketFailures>0)&&now<marketRetryAt))return;
+  lastMarketAttempt=Date.now();
+  marketLoadPending=true;
+  const status=$('status');
+  status.textContent=csText('Обновление CoinGecko…');
+  try {
+    const pages=await Promise.allSettled([1,2,3,4].map(page=>getJson(
+      'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page='+
+      page+'&sparkline=false&price_change_percentage=24h')));
+    const good=pages.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length>0);
+    if(!good.length)throw Error('No market pages');
+    if(good.length<4){throw Error('Partial CoinGecko market response: '+good.length+'/4 pages')}
+    const map=new Map();
+    good.forEach(x=>x.value.forEach(c=>{if(c&&typeof c.id==='string')map.set(c.id,c)}));
+    if(!map.size)throw Error('No market assets');
+    coins=[...map.values()];
+    lastMarketSuccess=Date.now();
+    marketFailures=0;
+    marketRetryAt=lastMarketSuccess+300000;
+    const btc=coins.find(c=>c.id==='bitcoin');
+    if(btc)btcUpdate(btc);
+    render();
+    if(selectedCoinId&&coins.some(c=>c.id===selectedCoinId))openCoin(selectedCoinId,true);
+    else if(btc&&!$('search').value.trim())openCoin(btc.id);
+    status.textContent='CoinGecko · '+new Date(lastMarketSuccess).toLocaleTimeString()+' · '+coins.length+csText(' монет');
+    $('dot').classList.add('ok');
+    updatePotentialTimestamp();
+    refreshLiveValues();
+  } catch(e) {
+    console.warn('CoinGecko refresh failed',e);
+    marketFailures++;
+    marketRetryAt=Date.now()+Math.min(900000,30000*2**Math.min(marketFailures-1,5))*(0.8+Math.random()*0.4);
+    marketRetryAt=Math.max(marketRetryAt,coinGeckoRetryAt);
+    updatePotentialTimestamp(true);
+    if(coinGeckoRetryAt>Date.now()) {
+      status.textContent='CoinGecko: лимит запросов · повтор после '+new Date(marketRetryAt).toLocaleTimeString();
+    }
+    if(coins.length) {
+      if(coinGeckoRetryAt<=Date.now())status.textContent=csText('CoinGecko недоступен · сохранены прежние данные');
+      return;
+    }
+    try {
+      const t=await getJson('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
+      $('btc').textContent=usd(Number(t.lastPrice));
+      $('btcChange').textContent='24h: '+fmt(Number(t.priceChangePercent))+'%';
+      if(coinGeckoRetryAt<=Date.now())status.textContent='BTC: Binance · каталог временно недоступен';
+      $('dot').classList.add('ok');
+    } catch(err) {
+      if(coinGeckoRetryAt<=Date.now())status.textContent=csText('Рыночные данные недоступны');
+    }
+  } finally {
+    marketLoadPending=false;
+  }
+}
 
 $('cvdWindow').addEventListener('change',()=>{if(lastSpotSymbol&&selectedCoinId)loadTrades(lastSpotSymbol,selectedCoinId)});
 $('marketTabs').addEventListener('click',e=>{const b=e.target.closest('button[data-market-tab]');
