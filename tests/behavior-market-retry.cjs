@@ -156,3 +156,16 @@ test('a longer cooldown is honored and existing prices survive 429', async () =>
   await b.run('load(true)');
   assert.equal(b.marketCalls(), 4, 'Server deadline must not be capped by the local 15-minute backoff');
 });
+
+test('absurd Retry-After is capped at two hours and recovers afterward', async () => {
+  const b = browser({ retryAfter: '999999999' });
+  await flush();
+  assert.equal(b.marketCalls(), 4);
+  b.respond(200);
+  b.setTime(b.now() + 7199999);
+  await b.run('load(true)');
+  assert.equal(b.marketCalls(), 4, 'Cooldown must last until its bounded deadline');
+  b.setTime(b.now() + 1);
+  await b.run('load(true)');
+  assert.equal(b.marketCalls(), 8, 'Excessive server delay must not disable market data indefinitely');
+});
