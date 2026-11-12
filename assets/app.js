@@ -277,7 +277,11 @@ function updatePotentialTimestamp(error=false) {
 }
 async function load(force=false) {
   const now=Date.now();
-  if(marketLoadPending||now<coinGeckoRetryAt||((!force||marketFailures>0)&&now<marketRetryAt))return;
+  if(marketLoadPending)return;
+  if(now<coinGeckoRetryAt||((!force||marketFailures>0)&&now<marketRetryAt)) {
+    if(force)$('status').textContent='CoinGecko: повтор после '+new Date(Math.max(coinGeckoRetryAt,marketRetryAt)).toLocaleTimeString();
+    return;
+  }
   lastMarketAttempt=Date.now();
   marketLoadPending=true;
   const status=$('status');
@@ -362,7 +366,7 @@ $('sort').addEventListener('change',render);
 $('volGrowth').addEventListener('change',render);
 $('liquidity').addEventListener('change',render);
 $('refresh').addEventListener('click',()=>load(true));
-$('potentialRefresh').addEventListener('click',load);
+$('potentialRefresh').addEventListener('click',()=>load(true));
 document.querySelectorAll('#major,#small').forEach(t=>t.addEventListener('click',e=>{const research=e.target.closest('button[data-research]');
 if(research){inspectPotential(research.dataset.research);
 return}const star=e.target.closest('button[data-favorite]');
