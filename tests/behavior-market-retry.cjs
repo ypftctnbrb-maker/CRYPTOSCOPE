@@ -184,3 +184,18 @@ test('blocked refresh keeps the saved data time and does not duplicate feedback'
   assert.equal(message.split('повтор после').length, 2);
   assert.equal(b.marketCalls(), 4);
 });
+
+test('excessive Retry-After stays blocked for two hours, including numeric overflow', async () => {
+  for (const retryAfter of ['999999999', '8640000000000', '99999999999999999999', '9'.repeat(400)]) {
+    const b = browser({ retryAfter });
+    await flush();
+    assert.equal(b.marketCalls(), 4);
+    b.respond(200);
+    b.setTime(b.now() + 7199999);
+    await b.run('load(true)');
+    assert.equal(b.marketCalls(), 4, 'Must not retry before two-hour cap: ' + retryAfter.slice(0, 24));
+    b.setTime(b.now() + 1);
+    await b.run('load(true)');
+    assert.equal(b.marketCalls(), 8, 'Must recover at two-hour cap: ' + retryAfter.slice(0, 24));
+  }
+});
