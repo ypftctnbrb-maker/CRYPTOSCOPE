@@ -239,9 +239,13 @@ function rateLimitError(retryAt) {
   return error;
 }
 function coinGeckoDeadline(value,now) {
-  const raw=String(value||'').trim();
-  const parsed=/^\d+$/.test(raw)?now+Number(raw)*1000:Date.parse(raw);
-  return Number.isFinite(parsed)&&parsed<=8640000000000000?Math.max(now+30000,parsed):now+30000;
+  const raw=String(value||'').trim(),min=now+30000,max=now+7200000;
+  if(/^\d+$/.test(raw)) {
+    const seconds=Number(raw);
+    return seconds>=7200?max:Math.max(min,now+seconds*1000);
+  }
+  const parsed=Date.parse(raw);
+  return Number.isFinite(parsed)?Math.max(min,Math.min(max,parsed)):min;
 }
 async function getJson(url) {
   const isCoinGecko=url.startsWith('https://api.coingecko.com/');
