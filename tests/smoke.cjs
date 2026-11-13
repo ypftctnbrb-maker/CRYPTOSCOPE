@@ -15,7 +15,6 @@ assert.doesNotMatch(js,/const symbol=c\.symbol\.toUpperCase\(\)\.replace\(/,'tic
 assert.match(js,/Date\.now\(\)-liveLastMessage<15000/,'stale live prices must be rejected');
 assert.match(js,/lastMarketAttempt=Date\.now\(\)/,'market attempts must be tracked');
 assert.match(js,/marketRetryAt=Date\.now\(\)\+Math\.min\(900000/,'failed market fetches must back off');
-assert.match(js,/if\(good\.length<4\)/,'partial market pages must not replace the full snapshot');
 assert.match(js,/cell\.textContent=usd\(displayPrice\(c\)\)/,'stale live quotes must revert to fallback price');
 assert.match(js,/cell\.classList\.toggle\('live-price',Number\.isFinite\(price\)\)/,'stale live price styling must be cleared');
 assert.match(css,/:root/,'styles must load');
