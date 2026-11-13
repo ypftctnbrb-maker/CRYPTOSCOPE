@@ -229,7 +229,140 @@ async function openCoin(id, force=false) {
     if(detailSeq===detailRequest)$('detailStatus').textContent='Market data loaded; derivative metrics unavailable.';
   }
 }
-const researchCache=new Map();let researchSeq=0;const researchNumber=n=>Number.isFinite(Number(n))&&n!==null?fmt(Number(n),0):'Нет данных';const safeExternal=u=>{try{const x=new URL(u);return x.protocol==='https:'?x.href:''}catch(e){return ''}};async function inspectPotential(id){const c=coins.find(x=>x.id===id);if(!c)return;const seq=++researchSeq;const panel=$('fundamentalPanel'),body=$('fundamentalContent'),status=$('fundamentalStatus');panel.hidden=false;panel.scrollIntoView({behavior:'smooth',block:'start'});body.textContent='';status.textContent=csText('Проверяем ')+c.name+'…';try{let entry=researchCache.get(id);if(!entry||Date.now()-entry.time>86400000){const data=await getJson('https://api.coingecko.com/api/v3/coins/'+encodeURIComponent(id)+'?localization=false&tickers=false&market_data=true&community_data=true&developer_data=true&sparkline=false');entry={data,time:Date.now()};researchCache.set(id,entry)}if(seq!==researchSeq)return;const d=entry.data,dev=d.developer_data||{},community=d.community_data||{},supply=d.market_data||{},links=d.links||{};const commits=Number.isFinite(dev.commit_count_4_weeks)?dev.commit_count_4_weeks:null;const fdv=supply.fully_diluted_valuation?.usd;const cap=supply.market_cap?.usd;const github=(links.repos_url?.github||[]).map(safeExternal).filter(Boolean);const ratio=Number.isFinite(fdv)&&Number.isFinite(cap)&&cap>0?fdv/cap:null;const items=[['Коммиты за 4 недели',commits===null?'Нет данных':fmt(commits,0),commits!==null?'CoinGecko · developer_data':'Нет подтверждённых данных'],['GitHub репозитории',github.length?github.length+' ссылок':'Не указаны','Ссылки, заявленные проектом'],['Участники разработки',researchNumber(dev.pull_request_contributors),'CoinGecko · developer_data'],['Звёзды GitHub',researchNumber(dev.stars),'CoinGecko · developer_data'],['Подписчики Telegram',researchNumber(community.telegram_channel_user_count),'CoinGecko · community_data'],['FDV / капитализация',ratio!==null?fmt(ratio,2)+'×':'Нет данных','Оценка потенциального разводнения, не календарь разлоков'],['Циркулирующее предложение',researchNumber(supply.circulating_supply),'CoinGecko · market_data'],['Максимальная эмиссия',researchNumber(supply.max_supply),'CoinGecko · market_data'],['Разлоки и крупные держатели','Не проверено','Нужен специализированный источник']];body.innerHTML='<h4>'+escapeHtml(c.name)+' ('+escapeHtml(c.symbol.toUpperCase())+')</h4><div class="fundamental-grid">'+items.map(([label,value,source])=>'<div class="metric"><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(value)+'</strong><span class="flowlegend">'+escapeHtml(source)+'</span></div>').join('')+'</div>'+(github.length?'<div class="fundamental-links">GitHub: '+github.slice(0,3).map(u=>'<a target="_blank" rel="noopener noreferrer" href="'+escapeHtml(u)+'">'+escapeHtml(new URL(u).pathname.slice(1))+'</a>').join(' · ')+'</div>':'')+'<p class="note">Оценка перспективности не присвоена: наличие отдельных метрик не подтверждает активную команду, безопасность или будущий рост.</p>';status.textContent=csText('CoinGecko · проверено ')+new Date(entry.time).toLocaleString()+csText(' · повторная проверка через 24 ч')}catch(e){if(seq!==researchSeq)return;status.textContent='Фундаментальные данные недоступны (возможно ограничение API). Попробуйте позже.';body.textContent='Рейтинг не рассчитан: нет подтверждённых данных.'}}
+const researchCache=new Map(),researchPending=new Map();
+const RESEARCH_TTL=300000,RESEARCH_REQUEST_GAP=30000;
+let researchSeq=0,researchCoinId='',researchRetryAt=0;
+const researchValue=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:null;
+const researchNumber=n=>researchValue(n)===null?'Нет данных':fmt(n,0);
+const safeExternal=u=>{
+  if(typeof u!=='string')return '';
+  try {
+    const x=new URL(u);
+    return x.protocol==='https:'&&!x.username&&!x.password?x.href:'';
+  } catch(e) { return ''; }
+};
+function researchTime(value) {
+  if(typeof value!=='string')return 'время источника неизвестно';
+  const time=Date.parse(value);
+  if(!Number.isFinite(time)||time>Date.now()+60000)return 'время источника неизвестно';
+  const stale=Date.now()-time>600000?' · данные старше 10 мин':'';
+  return 'данные от '+new Date(time).toLocaleString('ru-RU')+stale;
+}
+function researchMarket(c) {
+  return {current_price:{usd:c.current_price},market_cap:{usd:c.market_cap},total_volume:{usd:c.total_volume},
+    fully_diluted_valuation:{usd:c.fully_diluted_valuation},circulating_supply:c.circulating_supply,
+    total_supply:c.total_supply,max_supply:c.max_supply};
+}
+function renderResearch(c,entry,notice='') {
+  const d=entry?.data,m=d?.market_data||researchMarket(c),dev=d?.developer_data||{},links=d?.links||{};
+  const received=entry?new Date(entry.time).toLocaleString('ru-RU'):'ещё не получена';
+  const sourceTime=d?m.last_updated||d.last_updated:c.last_updated;
+  const marketSource='CoinGecko · '+researchTime(sourceTime);
+  const devSource='CoinGecko · время метрики не предоставлено'+(entry?' · получено '+received:'');
+  const sourceUrl='https://www.coingecko.com/en/coins/'+encodeURIComponent(c.id);
+  const apiUrl='https://api.coingecko.com/api/v3/coins/'+encodeURIComponent(c.id);
+  const money=n=>researchValue(n)===null?'Нет данных':compact(n);
+  const token=n=>researchValue(n)===null?'Нет данных':fmt(n,4)+' '+String(c.symbol||'').toUpperCase();
+  const cap=researchValue(m.market_cap?.usd),fdv=researchValue(m.fully_diluted_valuation?.usd);
+  const volume=researchValue(m.total_volume?.usd),circulating=researchValue(m.circulating_supply),max=researchValue(m.max_supply);
+  const ratio=(a,b,suffix,scale=1)=>a!==null&&b!==null&&b>0?fmt(a/b*scale,2)+suffix:'Нет данных';
+  const share=circulating!==null&&max!==null&&max>0&&circulating<=max?fmt(circulating/max*100,2)+'%':'Нет данных';
+  const github=[...new Set((Array.isArray(links.repos_url?.github)?links.repos_url.github:[]).map(safeExternal).filter(u=>{
+    if(!u)return false;
+    const x=new URL(u);
+    return x.hostname==='github.com'&&/^\/[^/]+\/[^/]+\/?$/.test(x.pathname)&&!x.search&&!x.hash;
+  }))].slice(0,10);
+  const home=(Array.isArray(links.homepage)?links.homepage:[]).map(safeExternal).find(Boolean);
+  const market=[
+    ['Цена',researchValue(m.current_price?.usd)===null?'Нет данных':usd(m.current_price.usd),marketSource],
+    ['Капитализация',money(cap),marketSource],
+    ['Объём торгов за 24 ч',money(volume),marketSource],
+    ['Объём / капитализация',ratio(volume,cap,'%',100),marketSource+' · оборот, не глубина ликвидности'],
+    ['Полная оценка (FDV)',money(fdv),marketSource],
+    ['FDV / капитализация',ratio(fdv,cap,'×'),marketSource+' · не календарь разлоков'],
+    ['В обращении',token(circulating),marketSource],
+    ['Общее предложение',token(m.total_supply),marketSource],
+    ['Максимальное предложение',token(max),marketSource+' · отсутствие лимита в ответе не означает бесконечную эмиссию'],
+    ['Доля в обращении от максимума',share,marketSource+' · не график будущей эмиссии'],
+  ];
+  const development=[
+    ['Коммиты за 4 недели',researchNumber(dev.commit_count_4_weeks),devSource],
+    ['Участники pull request',researchNumber(dev.pull_request_contributors),devSource+' · не размер команды'],
+    ['Звёзды GitHub',researchNumber(dev.stars),devSource+' · не показатель качества'],
+    ['Подписчики Telegram',researchNumber(d?.community_data?.telegram_channel_user_count),devSource],
+  ];
+  const group=(title,items)=>'<h5>'+title+'</h5><div class="fundamental-grid">'+items.map(([label,value,source])=>
+    '<div class="metric"><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(value)+'</strong>'+
+    '<span class="flowlegend">'+escapeHtml(source)+'</span></div>').join('')+'</div>';
+  const external=(url,label)=>'<a target="_blank" rel="noopener noreferrer" href="'+escapeHtml(url)+'">'+escapeHtml(label)+'</a>';
+  const available=[...market,...development].filter(([,value])=>value!=='Нет данных').length;
+  const references=[external(sourceUrl,'CoinGecko'),external(apiUrl,'Ответ API')];
+  if(home)references.push(external(home,'Сайт проекта (ссылка CoinGecko)'));
+  github.forEach(u=>references.push(external(u,'GitHub: '+new URL(u).pathname.slice(1))));
+  $('fundamentalContent').innerHTML='<h4>'+escapeHtml(c.name)+' ('+escapeHtml(String(c.symbol||'').toUpperCase())+')</h4>'+
+    '<p class="research-coverage">Доступно '+available+' из '+(market.length+development.length)+' метрик. Карточка неполная.</p>'+
+    group('Рынок и предложение',market)+group('Разработка и сообщество',development)+
+    '<div class="fundamental-links">'+references.join(' · ')+'</div>'+
+    '<p class="note">Состав команды, разлоки и накопление держателей не подтверждены: специализированные источники не подключены. '+
+    (github.length?'Репозитории указаны CoinGecko; принадлежность и активность требуют проверки.':'Подтверждённых ссылок на репозитории нет. ')+
+    'Рейтинг перспективности не присвоен.</p>';
+  $('fundamentalStatus').textContent=(notice?notice+' · ':'')+(entry?'Ответ CoinGecko получен '+received:'Рыночный снимок каталога')+
+    ' · '+researchTime(sourceTime);
+}
+async function getResearch(id,force=false) {
+  if(researchPending.has(id))return researchPending.get(id);
+  const cached=researchCache.get(id);
+  if(!force&&cached&&Date.now()-cached.time<RESEARCH_TTL)return cached;
+  const retryAt=Math.max(researchRetryAt,coinGeckoRetryAt);
+  if(Date.now()<retryAt) {
+    const error=new Error('Research cooldown');
+    error.retryAt=retryAt;
+    throw error;
+  }
+  researchRetryAt=Date.now()+RESEARCH_REQUEST_GAP;
+  const pending=(async()=>{
+    const data=await getJson('https://api.coingecko.com/api/v3/coins/'+encodeURIComponent(id)+
+      '?localization=false&tickers=false&market_data=true&community_data=true&developer_data=true&sparkline=false');
+    if(!data||data.id!==id||!data.market_data||typeof data.market_data!=='object'||Array.isArray(data.market_data)) {
+      throw Error('Invalid research response');
+    }
+    const entry={data,time:Date.now()};
+    researchCache.set(id,entry);
+    if(researchCache.size>50)researchCache.delete(researchCache.keys().next().value);
+    return entry;
+  })();
+  researchPending.set(id,pending);
+  try { return await pending; }
+  finally { researchPending.delete(id); }
+}
+async function inspectPotential(id,force=false) {
+  const c=coins.find(x=>x.id===id);
+  if(!c)return;
+  researchCoinId=id;
+  const seq=++researchSeq,panel=$('fundamentalPanel');
+  panel.hidden=false;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  renderResearch(c,researchCache.get(id),'Загрузка подробностей');
+  $('researchRefresh').hidden=false;
+  $('researchRefresh').disabled=true;
+  panel.setAttribute('aria-busy','true');
+  try {
+    const entry=await getResearch(id,force);
+    if(seq===researchSeq)renderResearch(c,entry);
+  } catch(e) {
+    if(seq!==researchSeq)return;
+    const retryAt=Math.max(e.retryAt||0,coinGeckoRetryAt,researchRetryAt);
+    const message='Подробности не обновлены'+(Date.now()<retryAt?' · повтор после '+new Date(retryAt).toLocaleTimeString('ru-RU'):
+      ' · API недоступен или вернул некорректный ответ');
+    renderResearch(c,researchCache.get(id),message);
+  } finally {
+    if(seq===researchSeq) {
+      $('researchRefresh').disabled=false;
+      panel.setAttribute('aria-busy','false');
+    }
+  }
+}
+$('researchRefresh').addEventListener('click',()=>{if(researchCoinId)inspectPotential(researchCoinId,true);});
 let marketTab='leaders',majorShown=5,smallShown=5;let favoriteIds=new Set();try{const stored=JSON.parse(localStorage.getItem('cs-favorites')||'[]');if(Array.isArray(stored))favoriteIds=new Set(stored.filter(x=>typeof x==='string').slice(0,300))}catch(e){}function saveFavorites(){try{localStorage.setItem('cs-favorites',JSON.stringify([...favoriteIds]))}catch(e){}}function rowWithFavorite(c){const r=row(c);return r.replace('</tr>','<td class="favorite-cell"><button class="favorite-toggle'+(favoriteIds.has(c.id)?' is-favorite':'')+'" data-favorite="'+escapeHtml(c.id)+'" aria-label="'+(favoriteIds.has(c.id)?'Убрать из избранного':'Добавить в избранное')+'" aria-pressed="'+favoriteIds.has(c.id)+'">'+(favoriteIds.has(c.id)?'★':'☆')+'</button></td></tr>')}function render(){const query=$('search').value.toLowerCase().trim(),sort=$('sort').value;const base=coins.filter(c=>(c.name+' '+c.symbol).toLowerCase().includes(query));const numeric=(c,k)=>Number.isFinite(Number(c[k]))?Number(c[k]):-Infinity;const sorted=base.sort((a,b)=>numeric(b,sort)-numeric(a,sort));let major=sorted.filter(c=>c.market_cap>=200e6);if(marketTab==='gainers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h>0).sort((a,b)=>b.price_change_percentage_24h-a.price_change_percentage_24h);if(marketTab==='losers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h<0).sort((a,b)=>a.price_change_percentage_24h-b.price_change_percentage_24h);if(marketTab==='favorites')major=sorted.filter(c=>favoriteIds.has(c.id));const small=sorted.filter(c=>c.market_cap>=20e6&&c.market_cap<200e6&&Number.isFinite(c.total_volume)&&c.total_volume>=1e6&&c.market_cap>0&&c.total_volume/c.market_cap>=.1);const shownMajor=major.slice(0,majorShown),shownSmall=small.slice(0,smallShown);$('major').innerHTML=shownMajor.length?shownMajor.map(rowWithFavorite).join(''):'<tr><td colspan="6" class="loading">Нет подходящих монет</td></tr>';$('small').innerHTML=shownSmall.length?shownSmall.map(c=>rowWithFavorite(c).replace('</tr>','<td class="research-cell"><button class="research-button" data-research="'+escapeHtml(c.id)+'">Проверить</button></td></tr>')).join(''):'<tr><td colspan="7" class="loading">Нет подходящих монет</td></tr>';$('majorMore').hidden=majorShown>=major.length||marketTab!=='all';$('smallMore').hidden=smallShown>=small.length;$('majorCount').textContent=csText('Показано ')+shownMajor.length+csText(' из ')+major.length;$('smallCount').textContent=csText('Показано ')+shownSmall.length+csText(' из ')+small.length;$('marketHint').textContent=({leaders:csText('Топ-5 по капитализации'),gainers:csText('Топ-5 по росту за 24 часа'),losers:csText('Топ-5 по падению за 24 часа'),favorites:csText('Сохранённые монеты на этом устройстве'),all:csText('Каталог монет · по 20 за раз')})[marketTab];document.querySelectorAll('#marketTabs button').forEach(btn=>{const active=btn.dataset.marketTab===marketTab;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});if(window.CSI18N)window.CSI18N.apply()}
 let coinGeckoRetryAt=0;
 function rateLimitError(retryAt) {
