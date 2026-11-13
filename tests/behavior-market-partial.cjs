@@ -52,6 +52,7 @@ function browser(pages) {
   vm.createContext(context);
   vm.runInContext(source, context, { timeout: 1000 });
   const run = code => vm.runInContext(code, context);
+  run("openCoin=()=>{};document.getElementById('search').value=''");
   return { run, element, requests,
     ids: () => JSON.parse(run('JSON.stringify(coins.map(c=>c.id))')),
     calls: () => requests.filter(u => u.includes('/coins/markets')).length,
