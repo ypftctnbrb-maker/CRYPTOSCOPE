@@ -20,12 +20,14 @@ function browser(fetcher=async id=>({id,market_data:{},developer_data:{},links:{
     static now(){return now;}
   }
   const context={Date:Clock,URL,Intl,console,coins:[{...sample},{...sample,id:'other',name:'Other'}],
-    $:el,csText:s=>s,coinGeckoRetryAt:0,fmt:(n,d=2)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:d}).format(n),
+    $:el,csText:s=>s,coinGeckoRetryAt:0,
+    marketReceivedAt:new Map([['sample',now],['other',now]]),lastMarketSuccess:now,marketRefreshFailed:false,fmt:(n,d=2)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:d}).format(n),
     compact:n=>'$'+n,usd:n=>'$'+n,
     escapeHtml:s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     getJson:async url=>{requests.push(url);return fetcher(decodeURIComponent(url.split('/coins/')[1].split('?')[0]));}};
   vm.createContext(context);
   vm.runInContext(section,context);
+  vm.runInContext(source.slice(source.indexOf('function marketAssetNote('),source.indexOf('function marketCoverageNote(')),context);
   return {el,requests,run:code=>vm.runInContext(code,context),set:(key,value)=>{context[key]=value;},advance:ms=>{now+=ms;}};
 }
 test('missing and malformed research values never become zero',()=>{
@@ -52,7 +54,7 @@ test('market and supply are visible when project API fails; source age is preser
   const html=b.el('fundamentalContent').innerHTML,status=b.el('fundamentalStatus').textContent;
   assert.match(html,/100000000/);
   assert.match(html,/50,000,000 S/);
-  assert.match(html,/данные старше 10 мин/);
+  assert.match(html,/устарело/);
   assert.match(html,/Коммиты за 4 недели<\/small><strong>Нет данных/);
   assert.match(status,/Подробности не обновлены/);
   assert.doesNotMatch(status,/проверено/);

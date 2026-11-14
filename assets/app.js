@@ -264,7 +264,8 @@ function renderResearch(c,entry,notice='') {
   const d=entry?.data,m=d?.market_data||researchMarket(c),dev=d?.developer_data||{},links=d?.links||{};
   const received=entry?new Date(entry.time).toLocaleString('ru-RU'):'ещё не получена';
   const sourceTime=d?m.last_updated||d.last_updated:c.last_updated;
-  const marketSource='CoinGecko · '+researchTime(sourceTime);
+  const marketNote=d?researchTime(sourceTime):marketAssetNote(c);
+  const marketSource='CoinGecko · '+marketNote;
   const devSource='CoinGecko · время метрики не предоставлено'+(entry?' · получено '+received:'');
   const sourceUrl='https://www.coingecko.com/en/coins/'+encodeURIComponent(c.id);
   const apiUrl='https://api.coingecko.com/api/v3/coins/'+encodeURIComponent(c.id);
@@ -314,7 +315,7 @@ function renderResearch(c,entry,notice='') {
     (github.length?'Репозитории указаны CoinGecko; принадлежность и активность требуют проверки.':'Подтверждённых ссылок на репозитории нет. ')+
     'Рейтинг перспективности не присвоен.</p>';
   $('fundamentalStatus').textContent=(notice?notice+' · ':'')+(entry?'Ответ CoinGecko получен '+received:'Рыночный снимок каталога')+
-    ' · '+researchTime(sourceTime);
+    ' · '+marketNote;
 }
 async function getResearch(id,force=false) {
   if(researchPending.has(id))return researchPending.get(id);

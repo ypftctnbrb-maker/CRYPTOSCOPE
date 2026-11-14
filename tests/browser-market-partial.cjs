@@ -19,16 +19,18 @@ fs.mkdirSync(root, { recursive: true });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  const browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  let browser;
   const results = [];
   try {
+    browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome', headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     for (const width of [360, 390, 768, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
-      let partial = false, calls = 0;
+      let partial = false, limited = false, calls = 0, researchCalls = 0;
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.clock.install({ time: new Date('2026-11-13T19:00:00Z') });
+      await page.clock.pauseAt(new Date('2026-11-13T19:00:01Z'));
       const coin = (id, symbol, cap, price) => ({ id, symbol, name: id, market_cap: cap,
         current_price: price, total_volume: 10e6, price_change_percentage_24h: 2,
         last_updated: '2026-11-13T18:59:00Z' });
@@ -37,15 +39,19 @@ fs.mkdirSync(root, { recursive: true });
         [coin('alpha', 'alpha', 1e9, 1)], [coin('candidate', 'cand', 50e6, 0.1)],
         [coin('delta', 'delta', 30e6, 0.03)],
       ];
+      Object.assign(pages[2][0], { fully_diluted_valuation: 200e6, circulating_supply: 50e6,
+        total_supply: 75e6, max_supply: 100e6 });
       await page.route('**/*', async route => {
         const url = new URL(route.request().url());
         if (url.hostname === '127.0.0.1') return route.continue();
         if (url.pathname.endsWith('/coins/markets')) {
           calls++;
           const n = Number(url.searchParams.get('page'));
+          if (limited && n === 3) return route.fulfill({ status: 429, headers: { 'Retry-After': '999999999' }, body: '{}' });
           if (partial && n === 1) return route.fulfill({ status: 500, body: '{}' });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
+        if (url.pathname.includes('/coins/candidate')) researchCalls++;
         return route.abort();
       });
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
@@ -69,10 +75,39 @@ fs.mkdirSync(root, { recursive: true });
       const dimensions = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
       assert.ok(dimensions.document <= dimensions.viewport, JSON.stringify(dimensions));
       partial = false;
-      await page.clock.fastForward(30000);
+      await page.clock.fastForward(await page.evaluate(() => Math.max(0, marketRetryAt - Date.now())));
       await page.locator('#refresh').click();
       await page.waitForFunction(() => document.getElementById('dot').classList.contains('ok'));
       assert.doesNotMatch(await page.locator('#potentialUpdated').innerText(), /неполн/);
+      // Combined catalogue/research flow: retained supply, shared 429 cap, no click spam.
+      limited = true;
+      await page.clock.fastForward(60000);
+      await page.locator('#refresh').click();
+      await page.waitForFunction(() => document.getElementById('status').textContent.includes('3/4'));
+      const deadline = await page.evaluate(() => marketRetryAt);
+      assert.equal(await page.evaluate(() => marketRetryAt - Date.now()), 7200000);
+      await page.locator('button[data-research="candidate"]').click();
+      await page.waitForFunction(() => !document.getElementById('researchRefresh').disabled);
+      await page.locator('#researchRefresh').click();
+      await page.waitForFunction(() => !document.getElementById('researchRefresh').disabled);
+      assert.equal(researchCalls, 0);
+      const provenance = await page.evaluate(() => marketAssetNote(coins.find(c => c.id === 'candidate')));
+      assert.ok((await page.locator('#fundamentalStatus').innerText()).includes(provenance));
+      assert.match(await page.locator('#fundamentalContent').innerText(), /не обновлено/);
+      assert.match(await page.locator('#fundamentalContent').innerText(), /200M/);
+      assert.equal(await page.locator('#fundamentalContent strong').filter({ hasText: 'CAND' }).count(), 3);
+      await page.screenshot({ path: `${root}/research-${width}.png`, fullPage: false });
+      const researchDimensions = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
+      assert.ok(researchDimensions.document <= researchDimensions.viewport, JSON.stringify(researchDimensions));
+      const limitedCalls = calls;
+      await page.clock.fastForward(deadline - await page.evaluate(() => Date.now()) - 1);
+      await page.locator('#potentialRefresh').click();
+      assert.equal(calls, limitedCalls);
+      limited = false;
+      await page.clock.fastForward(1);
+      await page.locator('#refresh').click();
+      await page.waitForFunction(() => document.getElementById('dot').classList.contains('ok'));
+      assert.equal(calls, limitedCalls + 4);
       // A new visit has no complete snapshot to retain: never claim a market-wide top.
       partial = true;
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -82,12 +117,12 @@ fs.mkdirSync(root, { recursive: true });
       assert.match(await page.locator('#marketHint').innerText(), /загруженн/);
       assert.deepEqual(errors, []);
       results.push({ width, partialRetainsLeaders: true, favoritesRetained: true,
-        clickBackoff: true, fullRecovery: true, horizontalOverflow: false, pageErrors: errors });
+        clickBackoff: true, fullRecovery: true, researchRetainedSupply: true, sharedTwoHourCap: true, horizontalOverflow: false, pageErrors: errors });
       await page.close();
     }
     console.log(JSON.stringify({ fixtureBrowserChecks: results }, null, 2));
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
