@@ -11,7 +11,24 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
+  browser-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test driver
+        run: npm install --prefix "$RUNNER_TEMP/browser-driver" --ignore-scripts --no-audit --no-fund playwright@1.62.1
+      - name: Check partial catalogue in desktop and mobile Chromium
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: NODE_PATH="$RUNNER_TEMP/browser-driver/node_modules" node tests/browser-market-partial.cjs
   deploy:
+    needs: browser-market
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
