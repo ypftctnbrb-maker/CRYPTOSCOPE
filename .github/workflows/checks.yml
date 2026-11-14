@@ -19,3 +19,22 @@ jobs:
       - run: node tests/behavior-chart-symbol.cjs
       - run: node tests/behavior-live.cjs
       - run: node --test tests/behavior-market-retry.cjs
+      - run: node --test tests/behavior-market-partial.cjs
+      - run: node --test tests/behavior-research.cjs
+      - run: node --test tests/f1-research-stale-catalogue.cjs tests/f6-research-empty-market-data.cjs
+  browser-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test driver
+        run: npm install --prefix "$RUNNER_TEMP/browser-driver" --ignore-scripts --no-audit --no-fund playwright@1.62.1
+      - name: Check partial catalogue in desktop and mobile Chromium
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: NODE_PATH="$RUNNER_TEMP/browser-driver/node_modules" node tests/browser-market-partial.cjs

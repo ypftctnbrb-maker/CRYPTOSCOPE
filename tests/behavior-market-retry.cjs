@@ -3,8 +3,27 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { spawnSync } = require('node:child_process');
 const source = fs.readFileSync('assets/app.js', 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('HTTP-date formats use UTC in every tested local timezone', () => {
+  const deadlineSource = source.slice(source.indexOf('function coinGeckoDeadline('), source.indexOf('async function getJson('));
+  const script = deadlineSource + `
+    const assert = require('node:assert/strict');
+    const responseTime = Date.UTC(1994, 10, 6, 8, 49, 37);
+    const dates = ['Sun, 06 Nov 1994 08:49:37 GMT', 'Sunday, 06-Nov-94 08:49:37 GMT', 'Sun Nov  6 08:49:37 1994'];
+    for (const offset of [-3600000, 3600000, 99*3600000]) {
+      const now = responseTime - offset;
+      const expected = Math.max(now + 30000, Math.min(now + 7200000, responseTime));
+      for (const date of dates) assert.equal(coinGeckoDeadline(date, now), expected, date + ' offset ' + offset);
+    }
+  `;
+  for (const zone of ['UTC', 'Europe/Moscow', 'America/Los_Angeles']) {
+    const result = spawnSync(process.execPath, ['-e', script], { env: { ...process.env, TZ: zone }, encoding: 'utf8' });
+    assert.equal(result.status, 0, zone + ': ' + result.stderr);
+  }
+});
 
 function browser({ retryAfter = '900', status = 429 } = {}) {
   let now = 1800000000000, responseStatus = status, header = retryAfter, timerId = 0;
@@ -183,4 +202,19 @@ test('blocked refresh keeps the saved data time and does not duplicate feedback'
   assert.match(message, /данные от/);
   assert.equal(message.split('повтор после').length, 2);
   assert.equal(b.marketCalls(), 4);
+});
+
+test('excessive Retry-After stays blocked for two hours, including numeric overflow', async () => {
+  for (const retryAfter of ['999999999', '8640000000000', '99999999999999999999', '9'.repeat(400)]) {
+    const b = browser({ retryAfter });
+    await flush();
+    assert.equal(b.marketCalls(), 4);
+    b.respond(200);
+    b.setTime(b.now() + 7199999);
+    await b.run('load(true)');
+    assert.equal(b.marketCalls(), 4, 'Must not retry before two-hour cap: ' + retryAfter.slice(0, 24));
+    b.setTime(b.now() + 1);
+    await b.run('load(true)');
+    assert.equal(b.marketCalls(), 8, 'Must recover at two-hour cap: ' + retryAfter.slice(0, 24));
+  }
 });

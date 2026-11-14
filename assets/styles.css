@@ -26,3 +26,12 @@ html,body{max-width:100%;overflow-x:clip}main,.section,.panel,.tablewrap{min-wid
 
 .fundamental-panel{margin:18px 0;padding:16px}.fundamental-panel h3{margin:0}.fundamental-panel h4{margin:15px 0}.fundamental-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.fundamental-grid .metric strong{font-size:16px;display:block}.fundamental-links{margin:14px 0;overflow-wrap:anywhere}.fundamental-links a{color:var(--accent);text-decoration:underline}.research-button{font-size:12px;padding:6px 9px}.research-cell{min-width:90px}.fundamental-panel[hidden]{display:none}@media(max-width:700px){.fundamental-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.market #small~*{max-width:100%}#prospects .research-cell{display:table-cell!important;width:74px!important}#prospects .market th:nth-child(6),#prospects .market td:nth-child(6){display:none!important}#prospects .market td:nth-child(7){padding:5px 2px!important}#prospects .market th:nth-child(1),#prospects .market td:nth-child(1){width:35%!important}#prospects .market th:nth-child(2),#prospects .market td:nth-child(2){width:31%!important}#prospects .market th:nth-child(3),#prospects .market td:nth-child(3){width:18%!important}}
 
+
+.market-age{display:block;max-width:280px;white-space:normal;font-size:11px;line-height:1.4;color:var(--muted,#94a6bf)}
+.fundamental-panel h5{font-size:15px;margin:20px 0 10px}
+.research-coverage{color:var(--muted);font-size:13px}
+#researchRefresh,.research-button{min-height:44px;min-width:44px}
+#researchRefresh:disabled{cursor:wait;opacity:.6}
+.fundamental-grid .metric{min-width:0}
+.fundamental-grid .flowlegend{display:block;overflow-wrap:anywhere;margin-top:6px}
+@media(max-width:390px){.fundamental-grid{grid-template-columns:minmax(0,1fr)}}
