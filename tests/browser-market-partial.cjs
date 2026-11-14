@@ -46,7 +46,7 @@ fs.mkdirSync(root, { recursive: true });
         if (url.pathname.endsWith('/coins/markets')) {
           calls++;
           const n = Number(url.searchParams.get('page'));
-          if (limited && n === 3) return route.fulfill({ status: 429, headers: { 'Retry-After': '999999999' }, body: '{}' });
+          if (limited && n === 3) return route.fulfill({ status: 429, headers: { 'Retry-After': '999999999', 'Access-Control-Expose-Headers': 'Retry-After' }, body: '{}' });
           if (partial && n === 1) return route.fulfill({ status: 500, body: '{}' });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
