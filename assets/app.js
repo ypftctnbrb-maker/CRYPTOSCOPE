@@ -420,7 +420,10 @@ function coinGeckoDeadline(value,now) {
     const seconds=Number(raw);
     return seconds>=7200?max:Math.max(min,now+seconds*1000);
   }
-  const parsed=Date.parse(raw);
+  // The obsolete HTTP asctime format has no timezone token, but HTTP dates are UTC.
+  const asctime=/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +([0-9]{1,2}) ([0-9]{2}:[0-9]{2}:[0-9]{2}) ([0-9]{4})$/.exec(raw);
+  const month=asctime?String('JanFebMarAprMayJunJulAugSepOctNovDec'.indexOf(asctime[1])/3+1).padStart(2,'0'):'';
+  const parsed=Date.parse(asctime?asctime[4]+'-'+month+'-'+asctime[2].padStart(2,'0')+'T'+asctime[3]+'Z':raw);
   return Number.isFinite(parsed)?Math.max(min,Math.min(max,parsed)):min;
 }
 async function getJson(url) {
