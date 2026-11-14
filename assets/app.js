@@ -362,7 +362,7 @@ async function inspectPotential(id,force=false) {
     const retryAt=Math.max(e.retryAt||0,coinGeckoRetryAt,researchRetryAt);
     const message='Подробности не обновлены'+(Date.now()<retryAt?' · повтор после '+new Date(retryAt).toLocaleTimeString('ru-RU'):
       ' · API недоступен или вернул некорректный ответ');
-    renderResearch(c,researchCache.get(id),message);
+    renderResearch(coins.find(x=>x.id===id)||c,researchCache.get(id),message);
   } finally {
     if(seq===researchSeq) {
       $('researchRefresh').disabled=false;
