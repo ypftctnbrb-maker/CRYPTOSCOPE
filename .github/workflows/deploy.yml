@@ -49,6 +49,7 @@ jobs:
           node --test tests/behavior-market-retry.cjs
           node --test tests/behavior-market-partial.cjs
           node --test tests/behavior-research.cjs
+          node --test tests/f1-research-stale-catalogue.cjs tests/f6-research-empty-market-data.cjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Prepare restricted public artifact
