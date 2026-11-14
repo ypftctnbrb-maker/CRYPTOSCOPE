@@ -28,3 +28,10 @@ html,body{max-width:100%;overflow-x:clip}main,.section,.panel,.tablewrap{min-wid
 
 
 .market-age{display:block;max-width:280px;white-space:normal;font-size:11px;line-height:1.4;color:var(--muted,#94a6bf)}
+.fundamental-panel h5{font-size:15px;margin:20px 0 10px}
+.research-coverage{color:var(--muted);font-size:13px}
+#researchRefresh,.research-button{min-height:44px;min-width:44px}
+#researchRefresh:disabled{cursor:wait;opacity:.6}
+.fundamental-grid .metric{min-width:0}
+.fundamental-grid .flowlegend{display:block;overflow-wrap:anywhere;margin-top:6px}
+@media(max-width:390px){.fundamental-grid{grid-template-columns:minmax(0,1fr)}}

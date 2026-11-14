@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('assets/app.js', 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
+const html = fs.readFileSync('index.html', 'utf8');
+const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const start = 1800000000000;
 const coin = (id, cap, price = 100) => ({ id, name: id, symbol: id, market_cap: cap,
   current_price: price, total_volume: 5e6, price_change_percentage_24h: 1,
@@ -18,13 +20,14 @@ function browser(pages) {
   let now = start, responses = pages, resolvePages;
   const elements = new Map(), requests = [];
   const element = id => {
+    if (!htmlIds.has(id)) return null;
     if (!elements.has(id)) {
       const classes = new Set(), handlers = new Map();
       elements.set(id, { value: id === 'search' ? 'hold' : id === 'sort' ? 'market_cap' : '',
         textContent: '', innerHTML: '', hidden: true, dataset: {}, handlers,
         classList: { add: n => classes.add(n), remove: n => classes.delete(n),
           toggle: (n, on) => on ? classes.add(n) : classes.delete(n), contains: n => classes.has(n) },
-        addEventListener: (name, fn) => handlers.set(name, fn), querySelectorAll: () => [], setAttribute() {},
+        addEventListener: (name, fn) => handlers.set(name, fn), querySelectorAll: () => [], setAttribute() {}, scrollIntoView() {},
       });
     }
     return elements.get(id);
@@ -45,6 +48,7 @@ function browser(pages) {
       const value = responses[Number(new URL(url).searchParams.get('page')) - 1];
       if (value === 'pending') await new Promise(resolve => { resolvePages = resolve; });
       if (value instanceof Error) throw value;
+      if (value?.status === 429) return { ok: false, status: 429, headers: { get: () => value.retryAfter } };
       if (value === 429) return { ok: false, status: 429, headers: { get: () => '900' } };
       return { ok: true, json: async () => value === 'pending' ? [coin('delayed', 1e9)] : value };
     },
@@ -171,4 +175,57 @@ test('concurrent refreshes never create a second page batch', async () => {
   b.release();
   await flush();
   assert.equal(b.run('marketLoadPending'), false);
+});
+
+
+test('warm partial 429 caps huge Retry-After, retains full records and recovers exactly at the deadline', async () => {
+  for (const retryAfter of ['999999999', '9'.repeat(400)]) {
+    const initial = full();
+    Object.assign(initial[2][0], { fully_diluted_valuation: 200e6, circulating_supply: 50e6,
+      total_supply: 75e6, max_supply: 100e6 });
+    const b = browser(initial);
+    await flush();
+    const saved = b.run("JSON.stringify(coins.find(c=>c.id==='candidate'))");
+    const received = b.run("marketReceivedAt.get('candidate')");
+    const attemptedAt = start + 600000;
+    b.setTime(attemptedAt);
+    b.respond([full()[0], full()[1], { status: 429, retryAfter }, full()[3]]);
+    await b.run('load(true)');
+    assert.equal(b.calls(), 8);
+    assert.equal(b.run("JSON.stringify(coins.find(c=>c.id==='candidate'))"), saved);
+    assert.equal(b.run("marketReceivedAt.get('candidate')"), received);
+    assert.match(b.run("marketAssetNote(coins.find(c=>c.id==='candidate'))"), /не обновлено/);
+    assert.equal(b.run('coinGeckoRetryAt'), attemptedAt + 7200000);
+    assert.equal(b.run('marketRetryAt'), attemptedAt + 7200000);
+    for (const id of ['refresh', 'potentialRefresh']) b.element(id).handlers.get('click')();
+    await b.run("inspectPotential('candidate')");
+    assert.equal(b.calls(), 8);
+    assert.equal(b.requests.filter(url => url.includes('/coins/candidate?')).length, 0);
+    const card = b.element('fundamentalContent').innerHTML;
+    assert.match(card, /Полная оценка \(FDV\)<\/small><strong>\$200M/);
+    assert.match(card, /50.000.000 CANDIDATE/);
+    assert.match(card, /75.000.000 CANDIDATE/);
+    assert.match(card, /100.000.000 CANDIDATE/);
+    b.setTime(attemptedAt + 7200000 - 1);
+    await b.run('load(true)');
+    assert.equal(b.calls(), 8);
+    b.setTime(attemptedAt + 7200000);
+    b.respond(full());
+    await b.run('load(true)');
+    assert.equal(b.calls(), 12);
+    assert.equal(b.run('marketFailures'), 0);
+    assert.equal(b.element('dot').classList.contains('ok'), true);
+  }
+});
+
+test('research fallback uses the same retained provenance as the catalogue', async () => {
+  const b = browser(full());
+  await flush();
+  b.setTime(start + 600000);
+  b.respond([full()[0], full()[1], { status: 429, retryAfter: '999999999' }, full()[3]]);
+  await b.run('load(true)');
+  await b.run("inspectPotential('candidate')");
+  const provenance = b.run("marketAssetNote(coins.find(c=>c.id==='candidate'))");
+  assert.ok(b.element('fundamentalStatus').textContent.includes(provenance));
+  assert.ok(b.element('fundamentalContent').innerHTML.includes(provenance));
 });

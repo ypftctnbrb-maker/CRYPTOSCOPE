@@ -20,6 +20,7 @@ jobs:
       - run: node tests/behavior-live.cjs
       - run: node --test tests/behavior-market-retry.cjs
       - run: node --test tests/behavior-market-partial.cjs
+      - run: node --test tests/behavior-research.cjs
   browser-market:
     runs-on: ubuntu-latest
     timeout-minutes: 5

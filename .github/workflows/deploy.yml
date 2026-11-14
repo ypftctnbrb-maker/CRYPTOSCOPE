@@ -31,6 +31,7 @@ jobs:
           node tests/behavior-live.cjs
           node --test tests/behavior-market-retry.cjs
           node --test tests/behavior-market-partial.cjs
+          node --test tests/behavior-research.cjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Prepare restricted public artifact
