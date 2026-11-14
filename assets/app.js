@@ -261,10 +261,12 @@ function researchMarket(c) {
     total_supply:c.total_supply,max_supply:c.max_supply};
 }
 function renderResearch(c,entry,notice='') {
-  const d=entry?.data,m=d?.market_data||researchMarket(c),dev=d?.developer_data||{},links=d?.links||{};
+  c=coins.find(x=>x.id===c.id)||c;
+  const d=entry?.data,hasMarket=!!d&&Object.keys(d.market_data||{}).length>0;
+  const m=hasMarket?d.market_data:researchMarket(c),dev=d?.developer_data||{},links=d?.links||{};
   const received=entry?new Date(entry.time).toLocaleString('ru-RU'):'ещё не получена';
-  const sourceTime=d?m.last_updated||d.last_updated:c.last_updated;
-  const marketNote=d?researchTime(sourceTime):marketAssetNote(c);
+  const sourceTime=hasMarket?m.last_updated||d.last_updated:c.last_updated;
+  const marketNote=hasMarket?researchTime(sourceTime):marketAssetNote(c);
   const marketSource='CoinGecko · '+marketNote;
   const devSource='CoinGecko · время метрики не предоставлено'+(entry?' · получено '+received:'');
   const sourceUrl='https://www.coingecko.com/en/coins/'+encodeURIComponent(c.id);
@@ -315,7 +317,7 @@ function renderResearch(c,entry,notice='') {
     (github.length?'Репозитории указаны CoinGecko; принадлежность и активность требуют проверки.':'Подтверждённых ссылок на репозитории нет. ')+
     'Рейтинг перспективности не присвоен.</p>';
   $('fundamentalStatus').textContent=(notice?notice+' · ':'')+(entry?'Ответ CoinGecko получен '+received:'Рыночный снимок каталога')+
-    ' · '+marketNote;
+    (d&&!hasMarket?' · рыночные данные из каталога':'')+' · '+marketNote;
 }
 async function getResearch(id,force=false) {
   if(researchPending.has(id))return researchPending.get(id);

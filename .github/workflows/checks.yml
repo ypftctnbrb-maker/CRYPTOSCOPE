@@ -21,6 +21,7 @@ jobs:
       - run: node --test tests/behavior-market-retry.cjs
       - run: node --test tests/behavior-market-partial.cjs
       - run: node --test tests/behavior-research.cjs
+      - run: node --test tests/f1-research-stale-catalogue.cjs tests/f6-research-empty-market-data.cjs
   browser-market:
     runs-on: ubuntu-latest
     timeout-minutes: 5
