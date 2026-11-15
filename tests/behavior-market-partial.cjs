@@ -229,3 +229,15 @@ test('research fallback uses the same retained provenance as the catalogue', asy
   assert.ok(b.element('fundamentalStatus').textContent.includes(provenance));
   assert.ok(b.element('fundamentalContent').innerHTML.includes(provenance));
 });
+
+test('one malformed row does not discard valid assets from the same market page', async () => {
+  const pages = full();
+  pages[2] = [coin('candidate', 50e6), null, coin('survivor', 70e6)];
+  const b = browser(pages);
+  await flush();
+  assert.ok(b.ids().includes('candidate'));
+  assert.ok(b.ids().includes('survivor'));
+  assert.equal(b.ids().includes('broken'), false);
+  assert.match(b.element('status').textContent, /3\\/4/);
+  assert.equal(b.element('dot').classList.contains('ok'), false);
+});
