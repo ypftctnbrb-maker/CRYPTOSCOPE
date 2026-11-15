@@ -238,6 +238,6 @@ test('one malformed row does not discard valid assets from the same market page'
   assert.ok(b.ids().includes('candidate'));
   assert.ok(b.ids().includes('survivor'));
   assert.equal(b.ids().includes('broken'), false);
-  assert.match(b.element('status').textContent, /3\\/4/);
+  assert.match(b.element('status').textContent, /3\/4/);
   assert.equal(b.element('dot').classList.contains('ok'), false);
 });
