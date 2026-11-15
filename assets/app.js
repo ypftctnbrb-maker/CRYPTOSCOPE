@@ -508,9 +508,12 @@ async function load(force=false) {
       'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page='+
       page+'&sparkline=false&price_change_percentage=24h')));
     const validAsset=c=>c&&typeof c.id==='string'&&c.id.trim()&&typeof c.name==='string'&&typeof c.symbol==='string';
-    const good=pages.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length>0&&x.value.every(validAsset));
+    const good=pages.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length>0)
+      .map(x=>({value:x.value.filter(validAsset),complete:x.value.every(validAsset)}))
+      .filter(x=>x.value.length>0);
     if(!good.length)throw Error('No market pages');
-    const partial=good.length<4,receivedAt=Date.now(),updatedIds=new Set();
+    const completePages=good.filter(x=>x.complete).length;
+    const partial=completePages<4,receivedAt=Date.now(),updatedIds=new Set();
     // Partial batches update known data without deleting assets from unavailable pages.
     const map=new Map(partial?coins.map(c=>[c.id,c]):[]);
     if(!partial)marketReceivedAt.clear();
@@ -520,7 +523,7 @@ async function load(force=false) {
       marketReceivedAt.set(c.id,receivedAt);
     }));
     coins=[...map.values()];
-    marketCoverage={pages:good.length,retained:coins.filter(c=>!updatedIds.has(c.id)).length};
+    marketCoverage={pages:completePages,retained:coins.filter(c=>!updatedIds.has(c.id)).length};
     lastMarketSuccess=receivedAt;
     marketRefreshFailed=false;
     if(partial)delayMarketRetry();
