@@ -9,7 +9,7 @@ fs.mkdirSync(root, { recursive: true });
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
-    if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html',
+    if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html',
       'assets/app.js', 'assets/styles.css', 'assets/information.css',
       'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js'].includes(file)) {
       response.writeHead(404).end();
