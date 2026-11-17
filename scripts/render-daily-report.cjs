@@ -15,7 +15,7 @@ function renderDailyReport({ date, text }) {
   return template.replace(/<title>[^<]*<\/title>/, '<title>Обзор рынка ' + escape(date) + ' | CRYPTOSCOPE</title>')
     .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="Обзор рынка за ' + escape(date) + '">')
     .replaceAll(' aria-current="page"', '')
-    .replace(/<main id="content">[\s\S]*?(?=<footer>)/, '<main id="content">\n' + content + '\n')
+    .replace(/<main id="content">[\s\S]*?(?=<footer>)/, () => '<main id="content">\n' + content + '\n')
     .replaceAll('href="./', 'href="../').replaceAll('src="./', 'src="../');
 }
 if (require.main === module) {
