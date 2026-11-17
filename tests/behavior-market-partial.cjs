@@ -65,6 +65,26 @@ function browser(pages) {
   };
 }
 
+test('initial market loading rows span every visible table header including trading', () => {
+  for (const id of ['major', 'small']) {
+    const table = html.match(new RegExp('<table class="market">(<thead>(?:(?!</table>)[\\s\\S])*?)' +
+      '<tbody id="' + id + '"[^>]*>([\\s\\S]*?)</tbody>'));
+    assert.ok(table, id + ' table exists');
+    const headers = (table[1].match(/<th\b/g) || []).length;
+    assert.equal(Number(table[2].match(/colspan="(\d+)"/)[1]), headers, id + ' loading row');
+  }
+});
+
+test('empty search results span every market header after rendering', async () => {
+  const b = browser(full());
+  await flush();
+  b.run("document.getElementById('search').value='no-such-coin';render()");
+  for (const [id, count] of [['major', 7], ['small', 8]]) {
+    assert.match(b.element(id).innerHTML, /Нет подходящих монет/);
+    assert.equal(Number(b.element(id).innerHTML.match(/colspan="(\d+)"/)[1]), count, id + ' empty row');
+  }
+});
+
 test('cold partial load renders available assets with incomplete coverage, never a global top', async () => {
   const b = browser([new Error('offline'), full()[1], full()[2], full()[3]]);
   await flush();
