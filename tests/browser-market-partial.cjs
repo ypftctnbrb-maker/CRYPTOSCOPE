@@ -122,7 +122,7 @@ fs.mkdirSync(root, { recursive: true });
         assert.match(await page.locator('footer').innerText(), /Не является инвестиционной рекомендацией/);
         assert.equal(await page.locator('h1').count(), 1);
         for (const target of ['index.html', 'about.html', 'methodology.html', 'disclaimer.html']) {
-          await page.locator('header a[href="./' + target + '"]').click();
+          await page.locator('header .information-links a[href="./' + target + '"]').click();
           assert.equal(new URL(page.url()).pathname, '/' + target);
           await page.goto(origin + '/' + file, { waitUntil: 'load' });
         }
