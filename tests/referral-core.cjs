@@ -3,6 +3,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const core = () => require('../assets/referrals.js');
+function memoryStorage(initial = {}) {
+  const data = new Map(Object.entries(initial));
+  return { get length() { return data.size; }, key: i => [...data.keys()][i] ?? null,
+    getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) };
+}
 
 test('one canonical configuration supplies every safe, disclosed referral block', () => {
   const { REF_BINGX } = require('../assets/config.js');
@@ -21,8 +26,7 @@ test('one canonical configuration supplies every safe, disclosed referral block'
 });
 
 test('click counter persists separately by placement and ignores malformed/unknown counts', () => {
-  let saved = '{"header":3,"footer":-5,"unknown":42,"coin":"8"}';
-  const storage = { getItem: () => saved, setItem: (key, value) => { saved = value; } };
+  const storage = memoryStorage({ 'cs-referral-clicks-v1': '{"header":3,"footer":-5,"unknown":42,"coin":"8"}' });
   const events = [];
   const tracker = core().createTracker(storage, data => events.push(data));
   tracker.count('header'); tracker.count('coin'); tracker.count('footer'); tracker.count('unknown');
@@ -30,6 +34,30 @@ test('click counter persists separately by placement and ignores malformed/unkno
   assert.deepEqual(core().createTracker(storage).counts(), { header: 4, coin: 1, footer: 1 });
   assert.deepEqual(events, [{ exchange: 'bingx', placement: 'header' },
     { exchange: 'bingx', placement: 'coin' }, { exchange: 'bingx', placement: 'footer' }]);
+});
+
+test('two already-open tabs retain each other\'s clicks and refresh displayed totals', () => {
+  const storage = memoryStorage();
+  const first = core().createTracker(storage), second = core().createTracker(storage);
+  first.count('header'); second.count('footer'); first.count('header'); second.count('header');
+  for (const tracker of [first, second, core().createTracker(storage)]) {
+    assert.deepEqual(tracker.counts(), { header: 3, footer: 1 });
+  }
+});
+
+test('overlapping writes from two tabs retain both increments of the same placement', () => {
+  const storage = memoryStorage();
+  const first = core().createTracker(storage), second = core().createTracker(storage);
+  const write = storage.setItem;
+  let overlap = true;
+  storage.setItem = (key, value) => {
+    if (overlap) { overlap = false; second.count('coin'); }
+    write(key, value);
+  };
+  first.count('coin');
+  assert.deepEqual(core().createTracker(storage).counts(), { coin: 2 });
+  assert.deepEqual(first.counts(), { coin: 2 });
+  assert.deepEqual(second.counts(), { coin: 2 });
 });
 
 test('broken storage or analytics never throws or stops navigation', () => {
