@@ -11,7 +11,7 @@ fs.mkdirSync(root, { recursive: true });
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
     if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html',
       'assets/app.js', 'assets/styles.css', 'assets/information.css',
-      'assets/config.js', 'assets/referrals.js', 'assets/referrals.css'].includes(file)) {
+      'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js'].includes(file)) {
       response.writeHead(404).end();
       return;
     }
