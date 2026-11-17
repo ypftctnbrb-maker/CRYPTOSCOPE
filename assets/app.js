@@ -388,10 +388,10 @@ let marketTab='leaders',majorShown=5,smallShown=5;let favoriteIds=new Set();try{
     c.total_volume>=1e6&&c.market_cap>0&&c.total_volume/c.market_cap>=.1);
   const shownMajor=major.slice(0,majorShown),shownSmall=small.slice(0,smallShown);
   $('major').innerHTML=shownMajor.length?shownMajor.map(rowWithFavorite).join(''):
-    '<tr><td colspan="6" class="loading">Нет подходящих монет</td></tr>';
+    '<tr><td colspan="7" class="loading">Нет подходящих монет</td></tr>';
   $('small').innerHTML=shownSmall.length?shownSmall.map(c=>rowWithFavorite(c).replace('</tr>',
     '<td class="research-cell"><button class="research-button" data-research="'+escapeHtml(c.id)+'">Проверить</button></td></tr>')).join(''):
-    '<tr><td colspan="7" class="loading">Нет подходящих монет</td></tr>';
+    '<tr><td colspan="8" class="loading">Нет подходящих монет</td></tr>';
   $('majorMore').hidden=majorShown>=major.length||marketTab!=='all';
   $('smallMore').hidden=smallShown>=small.length;
   $('majorCount').textContent=csText('Показано ')+shownMajor.length+csText(' из ')+major.length;
