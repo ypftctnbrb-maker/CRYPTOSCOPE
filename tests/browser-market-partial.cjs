@@ -9,7 +9,8 @@ fs.mkdirSync(root, { recursive: true });
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
-    if (!['index.html', 'assets/app.js', 'assets/styles.css'].includes(file)) {
+    if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html',
+      'assets/app.js', 'assets/styles.css', 'assets/information.css'].includes(file)) {
       response.writeHead(404).end();
       return;
     }
@@ -55,6 +56,7 @@ fs.mkdirSync(root, { recursive: true });
       });
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.getElementById('status').textContent.includes('5 монет'));
+      assert.match(await page.locator('#investmentDisclaimer').innerText(), /Не является инвестиционной рекомендацией/);
       await page.locator('#major button[data-favorite="bitcoin"]').click();
       partial = true;
       await page.clock.fastForward(60000);
@@ -114,8 +116,22 @@ fs.mkdirSync(root, { recursive: true });
       assert.equal(await page.locator('#major tr[data-id="bitcoin"]').count(), 0);
       assert.equal(await page.locator('#major tr[data-id="alpha"]').count(), 1);
       assert.match(await page.locator('#marketHint').innerText(), /загруженн/);
+      const informationPages = [];
+      for (const file of ['about.html', 'methodology.html', 'disclaimer.html']) {
+        await page.goto(origin + '/' + file, { waitUntil: 'load' });
+        assert.match(await page.locator('footer').innerText(), /Не является инвестиционной рекомендацией/);
+        assert.equal(await page.locator('h1').count(), 1);
+        for (const target of ['index.html', 'about.html', 'methodology.html', 'disclaimer.html']) {
+          await page.locator('header .information-links a[href="./' + target + '"]').click();
+          assert.equal(new URL(page.url()).pathname, '/' + target);
+          await page.goto(origin + '/' + file, { waitUntil: 'load' });
+        }
+        const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
+        assert.ok(size.scroll <= size.width, file + ': ' + JSON.stringify(size));
+        informationPages.push({ file, horizontalOverflow: false });
+      }
       assert.deepEqual(errors, []);
-      results.push({ width, partialRetainsLeaders: true, favoritesRetained: true,
+      results.push({ width, informationPages, partialRetainsLeaders: true, favoritesRetained: true,
         clickBackoff: true, fullRecovery: true, researchRetainedSupply: true, sharedTwoHourCap: true, horizontalOverflow: false, pageErrors: errors });
       await page.close();
     }

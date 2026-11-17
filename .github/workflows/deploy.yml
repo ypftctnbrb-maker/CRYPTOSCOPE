@@ -42,6 +42,8 @@ jobs:
         run: node --check assets/app.js
       - name: Run static smoke checks
         run: node tests/smoke.cjs
+      - name: Check information pages and publication artifact
+        run: node --test tests/project-information.cjs
       - name: Run market behavior checks
         run: |
           node tests/behavior-chart-symbol.cjs
@@ -54,10 +56,7 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Prepare restricted public artifact
         run: |
-          mkdir -p public/assets
-          cp index.html public/index.html
-          cp assets/app.js assets/styles.css public/assets/
-          touch public/.nojekyll
+          node scripts/prepare-public.cjs
           if grep -q 'id="language"' public/index.html; then echo 'ERROR: language selector still present'; exit 1; fi
           if grep -q 'English</option>' public/index.html; then echo 'ERROR: English option still present'; exit 1; fi
           if grep -Eq 'const extras=|},en:\{' public/assets/app.js; then echo 'ERROR: non-Russian localization remains'; exit 1; fi
