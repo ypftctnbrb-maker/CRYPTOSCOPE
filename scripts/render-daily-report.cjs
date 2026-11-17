@@ -13,6 +13,8 @@ function renderDailyReport({ date, text }) {
   const content = '<p class="eyebrow">CRYPTOSCOPE · ежедневный отчёт</p><h1>Обзор рынка · ' + escape(date) + '</h1>' + top +
     '<article><p>' + escape(text).replace(/\n/g, '</p><p>') + '</p></article>' + bottom;
   return template.replace(/<title>[^<]*<\/title>/, '<title>Обзор рынка ' + escape(date) + ' | CRYPTOSCOPE</title>')
+    .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="Обзор рынка за ' + escape(date) + '">')
+    .replaceAll(' aria-current="page"', '')
     .replace(/<main id="content">[\s\S]*?(?=<footer>)/, '<main id="content">\n' + content + '\n')
     .replaceAll('href="./', 'href="../').replaceAll('src="./', 'src="../');
 }
