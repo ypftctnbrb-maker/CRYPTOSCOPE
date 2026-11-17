@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const publicFiles = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html',
-  'assets/app.js', 'assets/styles.css', 'assets/information.css'];
+  'assets/app.js', 'assets/styles.css', 'assets/information.css',
+  'assets/config.js', 'assets/referrals.js', 'assets/referrals.css'];
 
 function preparePublic(source, destination) {
   // Validate everything first: a missing page must block publication.
