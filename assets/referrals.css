@@ -30,3 +30,10 @@ header .referral-block{max-width:360px;margin:0}.referral-slot{min-width:0;max-w
  body.referral-dock-open>main{overflow:auto;min-height:0;width:100%;margin:0 auto;overscroll-behavior:contain}
  .referral-mobile{width:100%;max-height:40dvh;overflow:auto}
 }
+@media(max-width:700px){
+ #markets .market tr>th:nth-child(n),#markets .market tr>td:nth-child(n),
+ #prospects .market tr>th:nth-child(n),#prospects .market tr>td:nth-child(n){width:auto!important;min-width:0!important}
+ #markets .market tr>.referral-trade-heading,#markets .market tr>.referral-trade-cell,
+ #prospects .market tr>.referral-trade-heading,#prospects .market tr>.referral-trade-cell{
+  display:block!important;grid-column:1/-1;max-width:100%;white-space:normal;overflow:visible}
+}

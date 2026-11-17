@@ -38,4 +38,6 @@ jobs:
       - name: Check partial catalogue in desktop and mobile Chromium
         env:
           CHROME_BIN: /usr/bin/google-chrome
-        run: NODE_PATH="$RUNNER_TEMP/browser-driver/node_modules" node tests/browser-market-partial.cjs
+        run: |
+          NODE_PATH="$RUNNER_TEMP/browser-driver/node_modules" node tests/browser-market-partial.cjs
+          NODE_PATH="$RUNNER_TEMP/browser-driver/node_modules" node tests/browser-referrals.cjs
