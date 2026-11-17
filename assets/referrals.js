@@ -9,6 +9,7 @@
   const placements = Object.freeze(['header', 'footer', 'coin', 'table', 'signal-oi', 'signal-funding', 'signal-cvd',
     'report-top', 'report-bottom', 'exchange', 'mobile']);
   const KEY = 'cs-referral-clicks-v1';
+  const SHARDS = 'cs-referral-clicks-v2:';
   const escape = value => String(value).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[c]);
@@ -20,21 +21,41 @@
       '<small class="referral-disclosure">Реферальная ссылка</small><p class="referral-risk">' + escape(RISK) + '</p></aside>';
   }
   function createTracker(storage, emit = () => {}) {
-    let values = {};
-    try {
-      const parsed = JSON.parse(storage?.getItem(KEY) || '{}');
-      for (const key of placements) {
-        if (Number.isSafeInteger(parsed?.[key]) && parsed[key] >= 0) values[key] = Math.min(1e9, parsed[key]);
+    // Each document writes its own record, so simultaneous tabs never overwrite each other.
+    // The old v1 record is read as a baseline and is never rewritten by this version.
+    const values = {};
+    let shard, observed = {};
+    try { shard = SHARDS + globalThis.crypto.randomUUID(); } catch (_) { /* memory-only if secure IDs are unavailable */ }
+    const add = (total, parsed) => {
+      for (const key of placements) if (Number.isSafeInteger(parsed?.[key]) && parsed[key] >= 0) {
+        total[key] = Math.min(1e9, (total[key] || 0) + parsed[key]);
       }
-    } catch (_) { /* Local counters are optional; navigation always works. */ }
+    };
+    const counts = () => {
+      try {
+        const total = {};
+        const read = key => {
+          try { add(total, JSON.parse(storage?.getItem(key) || '{}')); } catch (_) { /* ignore malformed records */ }
+        };
+        read(KEY);
+        for (let i = 0; i < storage?.length; i++) {
+          const key = storage.key(i);
+          if (key?.startsWith(SHARDS) && key !== shard) read(key);
+        }
+        observed = total;
+      } catch (_) { /* Keep last observed totals if storage becomes unavailable. */ }
+      const total = { ...observed };
+      add(total, values);
+      return total;
+    };
     return {
       count(placement) {
         if (!placements.includes(placement)) return;
         values[placement] = Math.min(1e9, (values[placement] || 0) + 1);
-        try { storage?.setItem(KEY, JSON.stringify(values)); } catch (_) { /* storage may be disabled */ }
+        try { if (shard) storage?.setItem(shard, JSON.stringify(values)); } catch (_) { /* storage may be disabled */ }
         try { emit({ exchange: 'bingx', placement }); } catch (_) { /* analytics must never block the link */ }
       },
-      counts: () => ({ ...values })
+      counts
     };
   }
   function clickHandler(tracker, updated = () => {}) {
@@ -101,6 +122,9 @@
     };
     document.addEventListener('click', clickHandler(tracker, update), true);
     document.addEventListener('auxclick', clickHandler(tracker, update), true);
+    host.addEventListener?.('storage', event => {
+      if (event.key === null || event.key === KEY || event.key?.startsWith(SHARDS)) update();
+    });
     hydrate(document); update(); installMobile(document, host);
   }
   return { block, placements, RISK, createTracker, clickHandler, mount, hydrate, install, installMobile };

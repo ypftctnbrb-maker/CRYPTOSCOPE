@@ -47,12 +47,12 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
       const page = await context.newPage(), errors = [];
       page.on('pageerror', error => errors.push(error.message));
       const click = async placement => {
-        const before = await page.evaluate(p => JSON.parse(localStorage.getItem('cs-referral-clicks-v1') || '{}')[p] || 0, placement);
+        const before = await page.evaluate(p => CSReferral.createTracker(localStorage).counts()[p] || 0, placement);
         const link = page.locator('a[data-referral="bingx"][data-placement="' + placement + '"]').first();
         const popup = page.waitForEvent('popup');
         await link.click();
         await (await popup).close();
-        assert.equal(await page.evaluate(p => JSON.parse(localStorage.getItem('cs-referral-clicks-v1'))[p], placement), before + 1);
+        assert.equal(await page.evaluate(p => CSReferral.createTracker(localStorage).counts()[p], placement), before + 1);
       };
       const linksAreSafe = async () => {
         for (const link of await page.locator('a[data-referral="bingx"]').all()) {
@@ -77,10 +77,10 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
           dock: document.getElementById('bingxMobile').getBoundingClientRect().top }));
         assert.ok(bounds.main <= bounds.dock + 1, 'mobile dock must not overlap scrollable content: ' + JSON.stringify(bounds));
         await click('mobile');
-        const count = await page.evaluate(() => localStorage.getItem('cs-referral-clicks-v1'));
+        const count = await page.evaluate(() => CSReferral.createTracker(localStorage).counts());
         await page.locator('#bingxMobileClose').click();
         assert.equal(await page.locator('#bingxMobile').isVisible(), false);
-        assert.equal(await page.evaluate(() => localStorage.getItem('cs-referral-clicks-v1')), count);
+        assert.deepEqual(await page.evaluate(() => CSReferral.createTracker(localStorage).counts()), count);
         await page.reload();
         assert.equal(await page.locator('#bingxMobile').isVisible(), false, 'dismissal persists for the session');
       }
@@ -97,9 +97,21 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
         }
         if (file.startsWith('reports/')) { await click('report-top'); await click('report-bottom'); }
       }
+      await page.goto(origin + '/where-to-trade.html', { waitUntil: 'load' });
+      const beforePeer = await page.evaluate(() => CSReferral.createTracker(localStorage).counts().footer || 0);
+      const peer = await context.newPage();
+      peer.on('pageerror', error => errors.push(error.message));
+      await peer.goto(origin + '/where-to-trade.html', { waitUntil: 'load' });
+      const peerPopup = peer.waitForEvent('popup');
+      await peer.locator('[data-placement="footer"]').click();
+      await (await peerPopup).close();
+      await page.waitForFunction(expected => [...document.querySelectorAll('[data-referral-counts] tbody tr')]
+        .some(row => row.querySelector('th')?.textContent === 'footer' && Number(row.querySelector('td')?.textContent) === expected), beforePeer + 1);
+      assert.equal(await page.evaluate(() => CSReferral.createTracker(localStorage).counts().footer), beforePeer + 1);
+      await peer.close();
       assert.deepEqual(errors, []);
       results.push({ width, allReferralAttributes: true, perPlacementClicks: true, tradeColumnVisible: true,
-        mobileDockNoOverlap: true, mobileDismissal: true, pagesAndReport: true, pageErrors: errors });
+        mobileDockNoOverlap: true, mobileDismissal: true, pagesAndReport: true, crossTabCounts: true, pageErrors: errors });
       await context.close();
     }
     console.log(JSON.stringify({ referralBrowserChecks: results }, null, 2));
