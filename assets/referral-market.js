@@ -2,6 +2,7 @@
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
   else {
+    root.CSReferralMarket = api;
     api.watchCoin(root.document, root.MutationObserver, root.CSReferral);
     api.watchTables(root.document, root.MutationObserver, root.CSReferral);
   }
@@ -30,5 +31,9 @@
       new Observer(update).observe(body, { childList: true });
     }
   }
-  return { watchCoin, watchTables };
+  function signalBlock(kind, confirmed, renderBlock) {
+    if (confirmed !== true || !['oi', 'funding', 'cvd'].includes(kind)) return '';
+    return renderBlock('signal-' + kind, 'Торговать этот сигнал на BingX');
+  }
+  return { watchCoin, watchTables, signalBlock };
 });
