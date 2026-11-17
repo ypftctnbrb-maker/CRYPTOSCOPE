@@ -10,7 +10,8 @@ fs.mkdirSync(root, { recursive: true });
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
     if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html',
-      'assets/app.js', 'assets/styles.css', 'assets/information.css'].includes(file)) {
+      'assets/app.js', 'assets/styles.css', 'assets/information.css',
+      'assets/config.js', 'assets/referrals.js', 'assets/referrals.css'].includes(file)) {
       response.writeHead(404).end();
       return;
     }

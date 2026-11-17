@@ -1,0 +1,9 @@
+.referral-block{margin:8px 0;padding:10px;border:1px solid #345475;border-radius:10px;background:#101e30;color:#dceaff;min-width:0}
+.referral-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;border:1px solid #56b9ff;
+ border-radius:8px;background:#163f61;color:#edf7ff!important;text-decoration:none!important;font:600 14px/1.3 system-ui;overflow-wrap:anywhere}
+.referral-link:hover{background:#1d527d}.referral-link:focus-visible{outline:3px solid #a8ddff;outline-offset:3px}
+.referral-disclosure{display:block;margin:5px 0;color:#b6cbdf;font-size:11px;line-height:1.3}
+.referral-risk{margin:5px 0 0!important;color:#bfccda;font:11px/1.4 system-ui!important;max-width:70ch;white-space:normal}
+header .referral-block{max-width:360px;margin:0}.referral-slot{min-width:0;max-width:100%}
+[data-referral-counts] table{width:100%;border-collapse:collapse;overflow-wrap:anywhere}
+[data-referral-counts] th,[data-referral-counts] td{padding:8px;text-align:left;border-bottom:1px solid #345475}

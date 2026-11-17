@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 
 const pages = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html'];
-const expectedFiles = [...pages, 'assets/app.js', 'assets/styles.css', 'assets/information.css', '.nojekyll'].sort();
+const expectedFiles = [...pages, 'assets/app.js', 'assets/styles.css', 'assets/information.css', 'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', '.nojekyll'].sort();
 const read = file => fs.readFileSync(file, 'utf8');
 const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? walk(path.join(dir, entry.name)).map(file => entry.name + '/' + file) : [entry.name]);
@@ -47,7 +47,9 @@ test('information pages are Russian, readable without JavaScript and have distin
     assert.match(html, /name="viewport"/);
     assert.match(html, /Content-Security-Policy/);
     assert.match(html, /<h1>[^<]+<\/h1>/);
-    assert.doesNotMatch(html, /<script\b|<iframe\b|\son\w+=/i);
+    assert.doesNotMatch(html, /<iframe\b|\son\w+=/i);
+    const scripts = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
+    assert.ok(scripts.every(m => /src="\.\/assets\/(config|referrals)\.js(?:\?[^"]*)?"/.test(m[1]) && !m[2].trim()));
     titles.add(html.match(/<title>([^<]+)<\/title>/)[1]);
     descriptions.add(html.match(/name="description" content="([^"]+)"/)[1]);
   }

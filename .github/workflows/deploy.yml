@@ -43,7 +43,7 @@ jobs:
       - name: Run static smoke checks
         run: node tests/smoke.cjs
       - name: Check information pages and publication artifact
-        run: node --test tests/project-information.cjs
+        run: node --test tests/project-information.cjs tests/referral-*.cjs
       - name: Run market behavior checks
         run: |
           node tests/behavior-chart-symbol.cjs
