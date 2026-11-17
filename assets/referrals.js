@@ -57,6 +57,25 @@
       mount(slot, slot.dataset.bingxPlacement, slot.dataset.bingxLabel || 'Торговать на BingX');
     }
   }
+  function installMobile(document, host) {
+    const panel = document.getElementById('bingxMobile'), close = document.getElementById('bingxMobileClose');
+    if (!panel || !close || typeof host.matchMedia !== 'function') return;
+    const media = host.matchMedia('(max-width:700px)');
+    let dismissed = false;
+    try { dismissed = host.sessionStorage.getItem('cs-bingx-mobile-dismissed') === '1'; } catch (_) { /* optional preference */ }
+    const update = () => {
+      const visible = media.matches && !dismissed;
+      panel.hidden = !visible;
+      document.body.classList.toggle('referral-dock-open', visible);
+    };
+    close.addEventListener('click', () => {
+      dismissed = true;
+      try { host.sessionStorage.setItem('cs-bingx-mobile-dismissed', '1'); } catch (_) { /* preference stays in memory */ }
+      update();
+    });
+    media.addEventListener('change', update);
+    update();
+  }
   function install(document, host) {
     if (!document || document.__csReferralInstalled) return;
     document.__csReferralInstalled = true;
@@ -82,7 +101,7 @@
     };
     document.addEventListener('click', clickHandler(tracker, update), true);
     document.addEventListener('auxclick', clickHandler(tracker, update), true);
-    hydrate(document); update();
+    hydrate(document); update(); installMobile(document, host);
   }
-  return { block, placements, RISK, createTracker, clickHandler, mount, hydrate, install };
+  return { block, placements, RISK, createTracker, clickHandler, mount, hydrate, install, installMobile };
 });

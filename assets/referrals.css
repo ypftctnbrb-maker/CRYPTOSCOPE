@@ -19,3 +19,14 @@ header .referral-block{max-width:360px;margin:0}.referral-slot{min-width:0;max-w
  .market .referral-trade-heading{text-align:left}.market .referral-trade-cell .referral-block{width:100%;padding:8px}
  .market .referral-trade-cell .referral-link{width:auto}.market td[colspan]{grid-column:1/-1}
 }
+
+.referral-mobile[hidden]{display:none!important}.referral-mobile{position:relative;background:#0d1524;padding:0 8px;z-index:6}
+#bingxMobileClose{position:absolute;right:16px;top:14px;min-width:44px;min-height:44px;cursor:pointer;background:#182e43;color:#edf7ff;
+ border:1px solid #56748f;border-radius:8px;font-size:20px}
+.referral-mobile .referral-block{margin:6px 0;padding-right:58px;box-shadow:0 -4px 20px #0005}
+@media(max-width:700px){
+ body.referral-dock-open{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+ body.referral-dock-open>header{position:relative}
+ body.referral-dock-open>main{overflow:auto;min-height:0;width:100%;margin:0 auto;overscroll-behavior:contain}
+ .referral-mobile{width:100%;max-height:40dvh;overflow:auto}
+}
