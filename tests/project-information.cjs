@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const vm = require('node:vm');
 
 const pages = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html'];
 const expectedFiles = [...pages, 'assets/app.js', 'assets/styles.css', 'assets/information.css', '.nojekyll'].sort();
@@ -54,8 +55,22 @@ test('information pages are Russian, readable without JavaScript and have distin
   assert.equal(descriptions.size, 3);
 });
 
+test('runtime translation preserves the exact homepage disclosure', () => {
+  const html = read('index.html'), source = read('assets/app.js');
+  const match = html.match(/<div id="investmentDisclaimer"([^>]*)>([^<]+)<\/div>/);
+  assert.ok(match, 'disclosure must have a stable element');
+  const node = { textContent: match[2], dataset: {} };
+  const key = match[1].match(/data-i="([^"]+)"/);
+  if (key) node.dataset.i = key[1];
+  const start = source.indexOf('const dict='), end = source.indexOf('function row(c)');
+  assert.ok(start >= 0 && end > start, 'translation source must be found');
+  const document = { documentElement: {}, querySelectorAll: () => key ? [node] : [] };
+  vm.runInNewContext(source.slice(start, end) + ';translate();', { document, render() {} });
+  assert.match(node.textContent, /Не является инвестиционной рекомендацией/);
+});
+
 test('methodology distinguishes spot trade-window CVD and futures snapshots with primary sources', () => {
-  const html = read('methodology.html');
+  const html = read('methodology.html').replace(/\s+/g, ' ');
   for (const text of ['/api/v3/aggTrades', '/fapi/v1/openInterest', '/fapi/v1/premiumIndex',
     'm=false', 'm=true', 'lastFundingRate', 'не фиксированные 24 часа', 'не годовая доходность']) {
     assert.ok(html.includes(text), text);

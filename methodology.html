@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Методология данных | CRYPTOSCOPE</title>
+<meta name="description" content="Источники и расчёт Spot CVD, открытого интереса и funding в CRYPTOSCOPE, единицы и ограничения.">
+<link rel="stylesheet" href="./assets/information.css?v=21785b796110">
+</head>
+<body class="information-page">
+<a class="skip-link" href="#content">К содержимому</a>
+<header><nav aria-label="Основная навигация">
+<a class="brand" href="./index.html">CRYPTO<span>SCOPE</span></a>
+<div class="information-links">
+<a href="./index.html">Рынок</a>
+<a href="./about.html">О проекте</a>
+<a href="./methodology.html" aria-current="page">Методология данных</a>
+<a href="./disclaimer.html">Дисклеймер</a>
+</div>
+</nav></header>
+<main id="content">
+<p class="eyebrow">CRYPTOSCOPE 3.0</p>
+<h1>Методология данных</h1>
+<p class="intro">У каждого показателя есть свой рынок и окно наблюдения. Сравнивайте данные только с учётом источника, времени и единиц.</p>
+<section>
+<h2>Рынок и цена</h2>
+<p>Каталог, капитализация и объём за 24 часа берутся из CoinGecko <code>/coins/markets</code>, в валюте USD. Загружаются четыре страницы до 250 монет каждая, а не весь рынок.</p>
+<p>Каталог запрашивается примерно раз в пять минут при открытой странице; ошибки и ограничения API могут увеличивать интервал. При неполной загрузке выборка помечается, прежние записи могут
+сохраняться.</p>
+<p>Время получения ответа и время <code>last_updated</code> источника различаются. Новый ответ не доказывает свежесть всех метрик.</p>
+<p>Для поддерживаемых пар текущая цена отдельно поступает из Binance Spot. Поток считается устаревшим после 15 секунд без свежих данных; используется доступная резервная цена CoinGecko.</p>
+<p>Свечи запрашиваются через Binance Spot <code>/api/v3/klines</code>; резервный график — TradingView. Цена на графике и агрегированная цена CoinGecko могут различаться.</p>
+<p>Документация: <a href="https://docs.coingecko.com/reference/coins-markets">CoinGecko Markets</a> и
+<a href="https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#klinecandlestick-data">Binance Spot: свечи</a>.</p>
+</section>
+<section>
+<h2>Spot CVD: поток агрессивных сделок</h2>
+<p>Источник — Binance Spot <code>/api/v3/aggTrades</code> для подтверждённой пары к USDT. Используется окно последних 1 000, 4 000 или 10 000 агрегированных сделок.</p>
+<p>Поле <code>q</code> — количество базовой монеты. При <code>m=false</code> покупатель выступает taker: объём прибавляется. При <code>m=true</code> покупатель — maker: объём вычитается.</p>
+<p class="formula">CVD начинается с нуля в начале выборки.<br>CVD(k) = сумма q агрессивных покупок − сумма q агрессивных продаж до сделки k.</p>
+<p>Единицы — базовая монета, например BTC для BTCUSDT. Период определяется временем первой и последней полученной сделки: это не фиксированные 24 часа.</p>
+<p>Показатель охватывает одну спотовую пару одной биржи. Он не описывает все биржи, фьючерсы, переводы кошельков или позиции конкретных трейдеров.</p>
+<p>Документация: <a href="https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#compressedaggregate-trades-list">Binance Spot: агрегированные сделки и поля q/m/T</a>.</p>
+</section>
+<section>
+<h2>Открытый интерес (OI)</h2>
+<p>Запрашивается текущий снимок <code>openInterest</code> из Binance USDⓈ-M Futures <code>/fapi/v1/openInterest</code>. В карточке значение подписано тикером базовой монеты.</p>
+<p>Это не долларовый номинал и не сумма OI всех бирж. Один снимок не позволяет вычислить рост OI за час или определить преобладание лонгов над шортами.</p>
+<p>Запрос выполняется при открытии или обновлении карточки. Отдельного непрерывного потока OI нет; время ответа биржи в текущей карточке не показано.</p>
+<p>Документация: <a href="https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Open-Interest">Binance Futures: Open Interest</a>.</p>
+</section>
+<section>
+<h2>Funding</h2>
+<p>Источник — <code>lastFundingRate</code> из Binance USDⓈ-M Futures <code>/fapi/v1/premiumIndex</code>. Для отображения в процентах значение умножается на 100.</p>
+<p>Это последняя ставка, возвращённая API, не годовая доходность и не гарантированный доход. Фиксированный восьмичасовой интервал на сайте не предполагается.</p>
+<p>Ставка загружается вместе с OI при запросе карточки; время биржевого снимка и следующий расчёт funding в текущем интерфейсе не показаны.</p>
+<p>Документация: <a href="https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Mark-Price">Binance Futures: Mark Price и Funding Rate</a>.</p>
+</section>
+<section>
+<h2>Пробелы и ограничения</h2>
+<p>Прочерк означает отсутствие отображаемого значения, а не подтверждённый ноль. Ликвидации не подключены. Изменение OI и CVD-дивергенции требуют сопоставимой истории и не выводятся из
+одиночного снимка.</p>
+<p>Региональные ограничения, лимиты API, ошибки сети и неподтверждённые пары могут сделать данные недоступными. Наличие спотовой пары не гарантирует доступность фьючерса.</p>
+<p>Источники могут менять формат, условия доступа и охват. Перед решением проверяйте значение непосредственно у поставщика данных.</p>
+</section>
+<footer>
+<p><strong>Не является инвестиционной рекомендацией</strong>. Данные могут задерживаться или быть недоступны.</p>
+<div class="information-links" aria-label="Информация о проекте">
+<a href="./index.html">Рынок</a>
+<a href="./about.html">О проекте</a>
+<a href="./methodology.html" aria-current="page">Методология данных</a>
+<a href="./disclaimer.html">Дисклеймер</a>
+</div>
+</footer>
+</main>
+</body>
+</html>

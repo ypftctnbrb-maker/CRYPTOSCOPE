@@ -1,0 +1,27 @@
+/* Information pages share the terminal palette without market scripts. */
+.information-page{margin:0;background:#080d18;color:#edf3ff;font:16px/1.7 system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark}
+.information-page *{box-sizing:border-box}
+.information-page header{background:#0d1524;border-bottom:1px solid #24334a}
+.information-page nav,.information-page main{max-width:960px;margin:auto;padding:24px}
+.information-page nav{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.information-page a{color:#83cbff;text-underline-offset:4px;overflow-wrap:anywhere}
+.information-page a:hover{color:#c6e9ff}
+.information-page a:focus-visible,.information-links a:focus-visible{outline:2px solid #56b9ff;outline-offset:4px}
+.information-page .brand{font-size:23px;font-weight:850;text-decoration:none;color:#edf3ff;letter-spacing:1px}
+.information-page .brand span{color:#56b9ff}
+.information-page h1{font-size:clamp(28px,5vw,42px);line-height:1.2;margin:16px 0}
+.information-page h2{font-size:22px;line-height:1.4;margin:0 0 12px}
+.information-page .eyebrow{font-size:13px;letter-spacing:2px;color:#94a6bf;text-transform:uppercase}
+.information-page .intro{font-size:18px;color:#b8c9df;max-width:760px}
+.information-page section{border:1px solid #24334a;background:#111b2d;border-radius:15px;padding:24px;margin:24px 0;min-width:0}
+.information-page p{margin:12px 0}
+.information-page code{font-size:.9em;color:#b2dfff;overflow-wrap:anywhere}
+.information-page .formula{padding:16px;background:#0b1423;border-left:3px solid #56b9ff;overflow-wrap:anywhere}
+.information-page .risk-note{padding:16px;border:1px solid #8b6740;border-radius:10px;background:#241d17;color:#ffdbaf}
+.information-page footer{border-top:1px solid #24334a;padding:24px 0;color:#94a6bf;font-size:14px}
+.information-page .skip-link{position:absolute;top:-100px;left:16px;background:#111b2d;padding:12px;z-index:10}
+.information-page .skip-link:focus{top:8px}
+.information-links{display:flex;flex-wrap:wrap;gap:8px 20px;margin:12px 0}
+.information-links a{display:inline-flex;align-items:center;min-height:44px;text-decoration:underline}
+.information-page .information-links{margin:0}
+@media(max-width:600px){.information-page nav,.information-page main{padding:18px 16px}.information-page section{padding:18px}}
