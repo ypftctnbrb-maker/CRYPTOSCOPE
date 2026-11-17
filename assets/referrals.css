@@ -7,3 +7,15 @@
 header .referral-block{max-width:360px;margin:0}.referral-slot{min-width:0;max-width:100%}
 [data-referral-counts] table{width:100%;border-collapse:collapse;overflow-wrap:anywhere}
 [data-referral-counts] th,[data-referral-counts] td{padding:8px;text-align:left;border-bottom:1px solid #345475}
+
+.market .referral-trade-cell{min-width:160px;max-width:220px;white-space:normal;text-align:left;vertical-align:top}
+.market .referral-trade-cell .referral-block{margin:0;padding:8px}.market .referral-trade-cell .referral-link{width:100%}
+@media(max-width:700px){
+ .market,.market thead,.market tbody{display:block!important}
+ .market thead tr,.market tbody tr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,.65fr) 44px}
+ #prospects .market tr{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,.65fr) 74px}
+ .market tr>th,.market tr>td,#prospects .market tr>th,#prospects .market tr>td{width:auto!important;min-width:0!important}
+ .market .referral-trade-heading,.market .referral-trade-cell{display:block!important;grid-column:1/-1;max-width:100%;overflow:visible}
+ .market .referral-trade-heading{text-align:left}.market .referral-trade-cell .referral-block{width:100%;padding:8px}
+ .market .referral-trade-cell .referral-link{width:auto}.market td[colspan]{grid-column:1/-1}
+}
