@@ -7,14 +7,18 @@ const publicFiles = ['index.html', 'about.html', 'methodology.html', 'disclaimer
   'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js'];
 
 function preparePublic(source, destination) {
+  const reports = path.join(source, 'reports');
+  const reportFiles = fs.existsSync(reports) ? fs.readdirSync(reports, { withFileTypes: true })
+    .filter(entry => entry.isFile() && /^\d{4}-\d{2}-\d{2}\.html$/.test(entry.name)).map(entry => 'reports/' + entry.name) : [];
+  const files = [...publicFiles, ...reportFiles];
   // Validate everything first: a missing page must block publication.
-  for (const file of publicFiles) {
+  for (const file of files) {
     const absolute = path.join(source, file);
     if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw Error('Missing public source: ' + file);
   }
   fs.mkdirSync(destination, { recursive: true });
   if (fs.readdirSync(destination).length) throw Error('Public destination must be empty');
-  for (const file of publicFiles) {
+  for (const file of files) {
     const target = path.join(destination, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.copyFileSync(path.join(source, file), target);
