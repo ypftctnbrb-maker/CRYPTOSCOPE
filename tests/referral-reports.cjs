@@ -94,3 +94,20 @@ test('publication copies only dated report HTML, not inputs or arbitrary files',
   require('../scripts/prepare-public.cjs').preparePublic(root, out);
   assert.deepEqual(fs.readdirSync(path.join(out, 'reports')), ['2026-11-17.html']);
 });
+
+test('report resource guard rejects an empty resource list instead of passing without checks', () => {
+  const { assertReportAssets } = require('./helpers/report-assets.cjs');
+  assert.throws(() => assertReportAssets([], process.cwd()), assert.AssertionError);
+});
+test('report resource guard rejects missing versions and missing required resources', () => {
+  const { assertReportAssets } = require('./helpers/report-assets.cjs');
+  const html = require('../scripts/render-daily-report.cjs').renderDailyReport({ date: '2026-11-18', text: 'ТЕСТ' });
+  const refs = [...html.matchAll(/(?:src|href)="(\.\.\/assets\/[^"]+)"/g)].map(match => match[1]);
+  assert.equal(assertReportAssets(refs, process.cwd()), 4, 'control fixture checks all four assets');
+  for (let i = 0; i < refs.length; i++) {
+    const unversioned = refs.map((ref, n) => n === i ? ref.replace(/\?v=.+$/, '') : ref);
+    assert.throws(() => assertReportAssets(unversioned, process.cwd()), assert.AssertionError, 'missing ?v= must fail');
+    assert.throws(() => assertReportAssets(refs.filter((_, n) => n !== i), process.cwd()), assert.AssertionError,
+      'missing required resource must fail');
+  }
+});

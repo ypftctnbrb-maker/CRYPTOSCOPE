@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
-const { createHash } = require('node:crypto');
+const { assertReportAssets } = require('./helpers/report-assets.cjs');
 const { REF_BINGX } = require('../assets/config.js');
 const { RISK } = require('../assets/referrals.js');
 const { preparePublic } = require('../scripts/prepare-public.cjs');
@@ -100,13 +100,9 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
           assert.match(await page.locator('[data-referral-analytics-status]').innerText(), /не подключён/);
         }
         if (file.startsWith('reports/')) {
-          for (const el of await page.locator('script[src], link[href]').all()) {
-            const ref = await el.getAttribute('src') || await el.getAttribute('href');
-            const asset = ref.match(/^\.\.\/(assets\/[\w.-]+)\?v=([0-9a-f]{12})$/);
-            if (!asset) continue;
-            const digest = createHash('sha256').update(fs.readFileSync(path.join(output, asset[1]))).digest('hex').slice(0, 12);
-            assert.equal(asset[2], digest, 'report resource hash matches the published file');
-          }
+          const refs = await page.locator('script[src], link[href]').evaluateAll(elements =>
+            elements.map(el => el.getAttribute('src') || el.getAttribute('href')));
+          assertReportAssets(refs, output);
           await click('report-top'); await click('report-bottom');
         }
       }
