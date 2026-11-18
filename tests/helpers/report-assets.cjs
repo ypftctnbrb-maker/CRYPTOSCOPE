@@ -7,7 +7,7 @@ function assertReportAssets(refs, output) {
   let checked = 0;
   const required = new Set(['assets/config.js', 'assets/referrals.js', 'assets/information.css', 'assets/referrals.css']);
   for (const ref of refs) {
-    if (!ref.startsWith('../assets/')) continue;
+    if (typeof ref !== 'string' || !ref.startsWith('../assets/')) continue;
     const asset = ref.match(/^\.\.\/(assets\/[\w.-]+)\?v=([0-9a-f]{12})$/);
     assert.ok(asset, 'every local report resource must include its asset hash: ' + ref);
     const digest = createHash('sha256').update(fs.readFileSync(path.join(output, asset[1]))).digest('hex').slice(0, 12);
