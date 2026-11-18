@@ -112,6 +112,25 @@ test('broken storage or analytics never throws or stops navigation', () => {
   assert.deepEqual(tracker.counts(), { table: 1 });
 });
 
+for (const unreadable of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:blocked']) {
+  test('one unreadable record does not discard readable counts or force repeated scans: ' + unreadable, () => {
+    const storage = memoryStorage({ 'cs-referral-clicks-v1': '{"header":1}',
+      'cs-referral-clicks-v2:valid': '{"coin":2}', 'cs-referral-clicks-v2:blocked': '{"table":3}' });
+    const get = storage.getItem, key = storage.key;
+    let enumerated = 0;
+    storage.getItem = k => { if (k === unreadable) throw Error('record unavailable'); return get(k); };
+    storage.key = i => { enumerated++; return key(i); };
+    const tracker = core().createTracker(storage, undefined, true);
+    const expected = unreadable.endsWith('v1') ? { coin: 2, table: 3 } : { header: 1, coin: 2 };
+    assert.deepEqual(tracker.counts(), expected);
+    const firstScan = enumerated;
+    assert.deepEqual(tracker.counts(), expected);
+    assert.equal(enumerated, firstScan, 'partial readable snapshot remains cached');
+    tracker.count('footer');
+    assert.deepEqual(tracker.counts(), { ...expected, footer: 1 });
+  });
+}
+
 test('primary/keyboard and middle clicks count once; other links and buttons do not', () => {
   const { REF_BINGX } = require('../assets/config.js');
   const counts = [];
