@@ -36,6 +36,26 @@ test('publication refreshes asset hashes in existing reports after runtime chang
   assert.ok(published.includes('https://example.invalid/style.css?v=keep'));
   assert.equal(published, fs.readFileSync(path.join(outputs[1], 'reports/' + date + '.html'), 'utf8'), 'deterministic output');
 });
+test('report packaging preserves every byte outside rewritten asset URLs including invalid UTF-8', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-byte-report-'));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-byte-artifact-'));
+  t.after(() => [root, out].forEach(dir => fs.rmSync(dir, { recursive: true, force: true })));
+  for (const file of fs.readdirSync('.').filter(file => file.endsWith('.html'))) fs.copyFileSync(file, path.join(root, file));
+  fs.cpSync('assets', path.join(root, 'assets'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'reports'));
+  const prefix = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('<html>\r\n<head>')]);
+  const reference = '<script src="../assets/config.js?v=old"></script>';
+  const suffix = Buffer.concat([Buffer.from('</head>\r\n<article>Цена $& $$ <b>текст</b> '),
+    Buffer.from([0x80, 0xc3, 0x28, 0xff]), Buffer.from('</article>\r\n</html>')]);
+  const input = Buffer.concat([prefix, Buffer.from(reference), suffix]);
+  const file = 'reports/2026-11-18.html';
+  fs.writeFileSync(path.join(root, file), input);
+  require('../scripts/prepare-public.cjs').preparePublic(root, out);
+  const digest = createHash('sha256').update(fs.readFileSync(path.join(out, 'assets/config.js'))).digest('hex').slice(0, 12);
+  const expected = Buffer.concat([prefix, Buffer.from(reference.replace('v=old', 'v=' + digest)), suffix]);
+  assert.deepEqual(fs.readFileSync(path.join(out, file)), expected, 'only the ASCII asset version changes');
+  assert.deepEqual(fs.readFileSync(path.join(root, file)), input, 'source bytes remain untouched');
+});
 test('daily report preserves literal dollar sequences without duplicating page markup', () => {
   const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
   for (const text of ['$&', '$`', "$'", '$$', 'BTC $100 · $& $$ $` <b>текст</b>']) {
