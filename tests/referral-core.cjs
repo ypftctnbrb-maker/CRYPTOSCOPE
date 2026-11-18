@@ -152,6 +152,60 @@ for (const changed of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:peer']) {
   });
 }
 
+for (const changed of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:peer']) {
+  test('failed deletion event is retried by counts without another storage event: ' + changed, () => {
+    const storage = memoryStorage({ [changed]: '{"coin":5}', 'cs-referral-clicks-v2:other': '{"header":2}' });
+    const get = storage.getItem, key = storage.key;
+    let available = true, removed = false, reads = 0, enumerated = 0;
+    storage.getItem = k => {
+      reads++;
+      if (k === changed && !available) throw Error('temporary denial');
+      return k === changed && removed ? null : get(k);
+    };
+    storage.key = i => { enumerated++; return key(i); };
+    const tracker = core().createTracker(storage, undefined, true);
+    assert.deepEqual(tracker.counts(), { coin: 5, header: 2 });
+    available = false; removed = true;
+    tracker.refresh(changed);
+    assert.deepEqual(tracker.counts(), { coin: 5, header: 2 }, 'keep last readable value while the failure persists');
+    reads = enumerated = 0; available = true;
+    assert.deepEqual(tracker.counts(), { header: 2 }, 'recover deletion without clear, reload or a new event');
+    assert.equal(reads, 1, 'only the unread key is retried');
+    assert.equal(enumerated, 0, 'recovery must not rescan all keys');
+    tracker.count('footer');
+    assert.deepEqual(tracker.counts(), { header: 2, footer: 1 });
+    assert.equal(reads, 1, 'a recovered key is no longer reread');
+  });
+}
+
+test('failed first event from a new peer record is retried without another event', () => {
+  const storage = memoryStorage({ 'cs-referral-clicks-v2:other': '{"header":2}' });
+  const tracker = core().createTracker(storage, undefined, true), get = storage.getItem;
+  assert.deepEqual(tracker.counts(), { header: 2 });
+  const changed = 'cs-referral-clicks-v2:new-peer';
+  storage.setItem(changed, '{"coin":7}');
+  let available = false;
+  storage.getItem = k => { if (k === changed && !available) throw Error('temporary denial'); return get(k); };
+  tracker.refresh(changed);
+  assert.deepEqual(tracker.counts(), { header: 2 });
+  available = true;
+  assert.deepEqual(tracker.counts(), { header: 2, coin: 7 }, 'new peer clicks recover on the next counts call');
+  assert.deepEqual(tracker.counts(), { header: 2, coin: 7 }, 'successful retry does not double count');
+});
+
+for (const changed of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:peer']) {
+  test('a record unreadable during the initial scan recovers without reload: ' + changed, () => {
+    const storage = memoryStorage({ [changed]: '{"coin":5}', 'cs-referral-clicks-v2:other': '{"header":2}' });
+    const get = storage.getItem;
+    let available = false;
+    storage.getItem = k => { if (k === changed && !available) throw Error('temporary denial'); return get(k); };
+    const tracker = core().createTracker(storage, undefined, true);
+    assert.deepEqual(tracker.counts(), { header: 2 });
+    available = true;
+    assert.deepEqual(tracker.counts(), { header: 2, coin: 5 });
+  });
+}
+
 test('primary/keyboard and middle clicks count once; other links and buttons do not', () => {
   const { REF_BINGX } = require('../assets/config.js');
   const counts = [];
