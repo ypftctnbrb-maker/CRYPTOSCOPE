@@ -41,8 +41,10 @@
       }
     };
     const read = key => {
+      let text;
+      try { text = storage?.getItem(key) || '{}'; }
+      catch (_) { return null; } // Unavailable storage is distinct from a missing or invalid record.
       try {
-        const text = storage?.getItem(key) || '{}';
         const parsed = JSON.parse(text), clean = {};
         add(clean, parsed);
         return clean;
@@ -50,11 +52,15 @@
     };
     const scan = () => {
       try {
-        const next = new Map([[KEY, read(KEY)]]), total = {};
+        const next = new Map(), total = {}, baseline = read(KEY);
+        if (baseline !== null) next.set(KEY, baseline);
         const length = storage?.length || 0;
         for (let i = 0; i < length; i++) {
           const key = storage.key(i);
-          if (key?.startsWith(SHARDS) && key !== shard) next.set(key, read(key));
+          if (key?.startsWith(SHARDS) && key !== shard) {
+            const record = read(key);
+            if (record !== null) next.set(key, record);
+          }
         }
         for (const record of next.values()) {
           for (const key of placements) if (record[key] !== undefined) total[key] = (total[key] || 0) + record[key];
@@ -69,6 +75,7 @@
       if (key === shard || !(key === KEY || key?.startsWith(SHARDS))) return;
       try {
         const old = records.get(key) || {}, next = read(key);
+        if (next === null) return; // Keep the last readable record on a failed storage event.
         for (const p of placements) {
           const value = (observed[p] || 0) - (old[p] || 0) + (next[p] || 0);
           if (value > 0) observed[p] = value;

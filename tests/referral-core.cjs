@@ -131,6 +131,27 @@ for (const unreadable of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:blocke
   });
 }
 
+for (const changed of ['cs-referral-clicks-v1', 'cs-referral-clicks-v2:peer']) {
+  test('a failed storage event preserves cached counts until a successful update or deletion: ' + changed, () => {
+    const storage = memoryStorage({ [changed]: '{"coin":5}', 'cs-referral-clicks-v2:other': '{"header":2}' });
+    const tracker = core().createTracker(storage, undefined, true), get = storage.getItem;
+    assert.deepEqual(tracker.counts(), { coin: 5, header: 2 });
+    let unavailable = true;
+    storage.getItem = key => { if (key === changed && unavailable) throw Error('temporary denial'); return get(key); };
+    storage.setItem(changed, '{"coin":8}');
+    assert.doesNotThrow(() => tracker.refresh(changed));
+    assert.deepEqual(tracker.counts(), { coin: 5, header: 2 }, 'a failed read is not a deletion');
+    tracker.count('footer');
+    assert.deepEqual(tracker.counts(), { coin: 5, header: 2, footer: 1 }, 'local click retains the last readable counts');
+    unavailable = false;
+    tracker.refresh(changed);
+    assert.deepEqual(tracker.counts(), { coin: 8, header: 2, footer: 1 }, 'a later event replaces the cached record');
+    storage.getItem = key => key === changed ? null : get(key);
+    tracker.refresh(changed);
+    assert.deepEqual(tracker.counts(), { header: 2, footer: 1 }, 'a successful missing-key read removes the record');
+  });
+}
+
 test('primary/keyboard and middle clicks count once; other links and buttons do not', () => {
   const { REF_BINGX } = require('../assets/config.js');
   const counts = [];
