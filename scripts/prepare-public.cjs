@@ -29,8 +29,9 @@ function preparePublic(source, destination) {
     const target = path.join(destination, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     if (file.startsWith('reports/')) {
-      // Refresh only local asset URLs in the artifact; keep the report source and its data unchanged.
-      fs.writeFileSync(target, refreshReportAssets(fs.readFileSync(path.join(source, file), 'utf8')));
+      // Latin-1 maps each byte one-to-one; only matched ASCII asset URLs may change.
+      const bytes = fs.readFileSync(path.join(source, file));
+      fs.writeFileSync(target, Buffer.from(refreshReportAssets(bytes.toString('latin1')), 'latin1'));
     } else fs.copyFileSync(path.join(source, file), target);
   }
   fs.writeFileSync(path.join(destination, '.nojekyll'), '');
