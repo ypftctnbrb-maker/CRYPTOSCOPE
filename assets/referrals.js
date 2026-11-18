@@ -10,6 +10,15 @@
     'report-top', 'report-bottom', 'exchange', 'mobile']);
   const KEY = 'cs-referral-clicks-v1';
   const SHARDS = 'cs-referral-clicks-v2:';
+  let fallbackSequence = 0;
+  function shardKey() {
+    try { return SHARDS + globalThis.crypto.randomUUID(); } catch (_) { /* older or non-secure browser context */ }
+    let entropy;
+    try { entropy = [...globalThis.crypto.getRandomValues(new Uint32Array(4))].map(n => n.toString(36)).join('-'); }
+    catch (_) { entropy = Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2); }
+    // This ID separates optional local counters; it is never an authentication or security token.
+    return SHARDS + 'fallback-' + Date.now().toString(36) + '-' + (++fallbackSequence).toString(36) + '-' + entropy;
+  }
   const escape = value => String(value).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[c]);
@@ -24,8 +33,8 @@
     // Each document writes its own record, so simultaneous tabs never overwrite each other.
     // The old v1 record is read as a baseline and is never rewritten by this version.
     const values = {};
-    let shard, observed = {};
-    try { shard = SHARDS + globalThis.crypto.randomUUID(); } catch (_) { /* memory-only if secure IDs are unavailable */ }
+    const shard = shardKey();
+    let observed = {};
     const add = (total, parsed) => {
       for (const key of placements) if (Number.isSafeInteger(parsed?.[key]) && parsed[key] >= 0) {
         total[key] = Math.min(1e9, (total[key] || 0) + parsed[key]);

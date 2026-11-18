@@ -2,12 +2,34 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const core = () => require('../assets/referrals.js');
 function memoryStorage(initial = {}) {
   const data = new Map(Object.entries(initial));
   return { get length() { return data.size; }, key: i => [...data.keys()][i] ?? null,
     getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) };
 }
+function trackerInBrowser(crypto) {
+  const module = { exports: {} };
+  const context = { module, require: () => require('../assets/config.js'), crypto };
+  vm.runInNewContext(fs.readFileSync('assets/referrals.js', 'utf8'), context);
+  return module.exports.createTracker;
+}
+
+test('clicks persist across documents when crypto.randomUUID is unavailable', () => {
+  const storage = memoryStorage();
+  const makeFirst = trackerInBrowser(undefined), makeSecond = trackerInBrowser({});
+  const first = makeFirst(storage), second = makeSecond(storage);
+  first.count('header'); second.count('header'); second.count('coin');
+  assert.deepEqual(JSON.parse(JSON.stringify(makeFirst(storage).counts())), { header: 2, coin: 1 });
+});
+
+test('crypto without randomUUID still persists clicks using available browser facilities', () => {
+  const storage = memoryStorage();
+  const create = trackerInBrowser({ getRandomValues: array => array.fill(123) });
+  create(storage).count('footer');
+  assert.deepEqual(JSON.parse(JSON.stringify(create(storage).counts())), { footer: 1 });
+});
 
 test('one canonical configuration supplies every safe, disclosed referral block', () => {
   const { REF_BINGX } = require('../assets/config.js');
