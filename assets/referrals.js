@@ -29,31 +29,59 @@
       '" target="_blank" rel="sponsored noopener noreferrer">' + escape(label) + '</a>' +
       '<small class="referral-disclosure">Реферальная ссылка</small><p class="referral-risk">' + escape(RISK) + '</p></aside>';
   }
-  function createTracker(storage, emit = () => {}) {
+  function createTracker(storage, emit = () => {}, cacheUpdates = false) {
     // Each document writes its own record, so simultaneous tabs never overwrite each other.
     // The old v1 record is read as a baseline and is never rewritten by this version.
     const values = {};
     const shard = shardKey();
-    let observed = {};
+    let observed = {}, records = new Map(), initialized = false;
     const add = (total, parsed) => {
       for (const key of placements) if (Number.isSafeInteger(parsed?.[key]) && parsed[key] >= 0) {
         total[key] = Math.min(1e9, (total[key] || 0) + parsed[key]);
       }
     };
-    const counts = () => {
+    const read = key => {
+      const text = storage?.getItem(key) || '{}';
       try {
-        const total = {};
-        const read = key => {
-          try { add(total, JSON.parse(storage?.getItem(key) || '{}')); } catch (_) { /* ignore malformed records */ }
-        };
-        read(KEY);
-        for (let i = 0; i < storage?.length; i++) {
+        const parsed = JSON.parse(text), clean = {};
+        add(clean, parsed);
+        return clean;
+      } catch (_) { return {}; }
+    };
+    const scan = () => {
+      try {
+        const next = new Map([[KEY, read(KEY)]]), total = {};
+        const length = storage?.length || 0;
+        for (let i = 0; i < length; i++) {
           const key = storage.key(i);
-          if (key?.startsWith(SHARDS) && key !== shard) read(key);
+          if (key?.startsWith(SHARDS) && key !== shard) next.set(key, read(key));
         }
+        for (const record of next.values()) {
+          for (const key of placements) if (record[key] !== undefined) total[key] = (total[key] || 0) + record[key];
+        }
+        records = next;
         observed = total;
+        initialized = true;
       } catch (_) { /* Keep last observed totals if storage becomes unavailable. */ }
-      const total = { ...observed };
+    };
+    const refresh = key => {
+      if (!initialized || key === null) { initialized = false; return; }
+      if (key === shard || !(key === KEY || key?.startsWith(SHARDS))) return;
+      try {
+        const old = records.get(key) || {}, next = read(key);
+        for (const p of placements) {
+          const value = (observed[p] || 0) - (old[p] || 0) + (next[p] || 0);
+          if (value > 0) observed[p] = value;
+          else delete observed[p];
+        }
+        if (Object.keys(next).length) records.set(key, next);
+        else records.delete(key);
+      } catch (_) { /* A storage failure must not block a referral link. */ }
+    };
+    const counts = () => {
+      if (!cacheUpdates || !initialized) scan();
+      const total = {};
+      add(total, observed);
       add(total, values);
       return total;
     };
@@ -64,7 +92,7 @@
         try { if (shard) storage?.setItem(shard, JSON.stringify(values)); } catch (_) { /* storage may be disabled */ }
         try { emit({ exchange: 'bingx', placement }); } catch (_) { /* analytics must never block the link */ }
       },
-      counts
+      counts, refresh
     };
   }
   function clickHandler(tracker, updated = () => {}) {
@@ -115,7 +143,7 @@
       if (typeof host.umami?.track === 'function') host.umami.track('referral_click', data);
       else if (typeof host.plausible === 'function') host.plausible('referral_click', { props: data });
     };
-    const tracker = createTracker(storage, emit);
+    const tracker = createTracker(storage, emit, true);
     const update = () => {
       for (const panel of document.querySelectorAll('[data-referral-counts]')) {
         const counts = tracker.counts();
@@ -132,7 +160,10 @@
     document.addEventListener('click', clickHandler(tracker, update), true);
     document.addEventListener('auxclick', clickHandler(tracker, update), true);
     host.addEventListener?.('storage', event => {
-      if (event.key === null || event.key === KEY || event.key?.startsWith(SHARDS)) update();
+      if (event.key === null || event.key === KEY || event.key?.startsWith(SHARDS)) {
+        tracker.refresh(event.key);
+        update();
+      }
     });
     hydrate(document); update(); installMobile(document, host);
   }
