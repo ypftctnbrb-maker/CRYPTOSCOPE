@@ -5,16 +5,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
+const { createHash } = require('node:crypto');
 const { REF_BINGX } = require('../assets/config.js');
 const { RISK } = require('../assets/referrals.js');
 const { preparePublic } = require('../scripts/prepare-public.cjs');
 const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
 (async () => {
   const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-referral-browser-'));
-  preparePublic(process.cwd(), output);
-  fs.mkdirSync(path.join(output, 'reports'), { recursive: true });
-  fs.writeFileSync(path.join(output, 'reports/2026-11-17.html'),
-    renderDailyReport({ date: '2026-11-17', text: 'ТЕСТОВЫЙ ОТЧЁТ. Эти данные не публикуются.' }));
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-referral-source-'));
+  preparePublic(process.cwd(), fixture);
+  fs.mkdirSync(path.join(fixture, 'reports'), { recursive: true });
+  fs.writeFileSync(path.join(fixture, 'reports/2026-11-17.html'),
+    renderDailyReport({ date: '2026-11-17', text: 'ТЕСТОВЫЙ ОТЧЁТ. Эти данные не публикуются.' })
+      .replace(/\?v=[0-9a-f]{12}/g, '?v=000000000000'));
+  preparePublic(fixture, output);
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const file = path.resolve(output, '.' + (pathname === '/' ? '/index.html' : pathname));
@@ -95,7 +99,16 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
           await click('exchange');
           assert.match(await page.locator('[data-referral-analytics-status]').innerText(), /не подключён/);
         }
-        if (file.startsWith('reports/')) { await click('report-top'); await click('report-bottom'); }
+        if (file.startsWith('reports/')) {
+          for (const el of await page.locator('script[src], link[href]').all()) {
+            const ref = await el.getAttribute('src') || await el.getAttribute('href');
+            const asset = ref.match(/^\.\.\/(assets\/[\w.-]+)\?v=([0-9a-f]{12})$/);
+            if (!asset) continue;
+            const digest = createHash('sha256').update(fs.readFileSync(path.join(output, asset[1]))).digest('hex').slice(0, 12);
+            assert.equal(asset[2], digest, 'report resource hash matches the published file');
+          }
+          await click('report-top'); await click('report-bottom');
+        }
       }
       await page.goto(origin + '/where-to-trade.html', { waitUntil: 'load' });
       const beforePeer = await page.evaluate(() => CSReferral.createTracker(localStorage).counts().footer || 0);
@@ -119,5 +132,6 @@ const { renderDailyReport } = require('../scripts/render-daily-report.cjs');
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(output, { recursive: true, force: true });
+    fs.rmSync(fixture, { recursive: true, force: true });
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 
 const publicFiles = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html',
   'assets/app.js', 'assets/styles.css', 'assets/information.css',
@@ -16,12 +17,21 @@ function preparePublic(source, destination) {
     const absolute = path.join(source, file);
     if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw Error('Missing public source: ' + file);
   }
+  const versions = new Map(reportFiles.length ? publicFiles.filter(file => file.startsWith('assets/')).map(file =>
+    [file, createHash('sha256').update(fs.readFileSync(path.join(source, file))).digest('hex').slice(0, 12)]) : []);
+  const refreshReportAssets = html => html.replace(/<(?:script|link)\b[^>]*>/gi, tag =>
+    tag.replace(/(\s(?:src|href)\s*=\s*)(["'])(\.\.\/(assets\/[\w.-]+))(?:\?v=[\w-]+)?\2/gi,
+      (match, attribute, quote, relative, file) => versions.has(file) ?
+        attribute + quote + relative + '?v=' + versions.get(file) + quote : match));
   fs.mkdirSync(destination, { recursive: true });
   if (fs.readdirSync(destination).length) throw Error('Public destination must be empty');
   for (const file of files) {
     const target = path.join(destination, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(path.join(source, file), target);
+    if (file.startsWith('reports/')) {
+      // Refresh only local asset URLs in the artifact; keep the report source and its data unchanged.
+      fs.writeFileSync(target, refreshReportAssets(fs.readFileSync(path.join(source, file), 'utf8')));
+    } else fs.copyFileSync(path.join(source, file), target);
   }
   fs.writeFileSync(path.join(destination, '.nojekyll'), '');
 }
