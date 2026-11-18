@@ -6,8 +6,9 @@ const vm = require('node:vm');
 const core = () => require('../assets/referrals.js');
 function memoryStorage(initial = {}) {
   const data = new Map(Object.entries(initial));
-  return { get length() { return data.size; }, key: i => [...data.keys()][i] ?? null,
-    getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) };
+  let keys;
+  return { get length() { return data.size; }, key: i => (keys ||= [...data.keys()])[i] ?? null,
+    getItem: key => data.get(key) ?? null, setItem: (key, value) => { keys = undefined; data.set(key, String(value)); } };
 }
 function trackerInBrowser(crypto) {
   const module = { exports: {} };
@@ -80,6 +81,28 @@ test('overlapping writes from two tabs retain both increments of the same placem
   assert.deepEqual(core().createTracker(storage).counts(), { coin: 2 });
   assert.deepEqual(first.counts(), { coin: 2 });
   assert.deepEqual(second.counts(), { coin: 2 });
+});
+
+test('cached UI totals preserve 5000 shards without rescanning 20000 unrelated keys on each click', () => {
+  const initial = {};
+  for (let i = 0; i < 20000; i++) initial['other:' + i] = 'unrelated';
+  for (let i = 0; i < 5000; i++) initial['cs-referral-clicks-v2:old-' + i] = '{"header":1}';
+  const storage = memoryStorage(initial), key = storage.key, get = storage.getItem;
+  let enumerated = 0, reads = 0;
+  storage.key = i => { enumerated++; return key(i); };
+  storage.getItem = k => { reads++; return get(k); };
+  const tracker = core().createTracker(storage, undefined, true);
+  assert.equal(tracker.counts().header, 5000);
+  enumerated = reads = 0;
+  for (let i = 0; i < 100; i++) { tracker.count('header'); assert.equal(tracker.counts().header, 5001 + i); }
+  assert.equal(enumerated, 0, 'unchanged records must not trigger another full key scan');
+  assert.equal(reads, 0, 'local clicks do not reread persisted records');
+  const changed = 'cs-referral-clicks-v2:old-10';
+  storage.setItem(changed, '{"header":5,"coin":2}');
+  tracker.refresh(changed);
+  assert.deepEqual(tracker.counts(), { header: 5104, coin: 2 });
+  assert.equal(enumerated, 0, 'a storage event refreshes only its own record');
+  assert.equal(reads, 1);
 });
 
 test('broken storage or analytics never throws or stops navigation', () => {
