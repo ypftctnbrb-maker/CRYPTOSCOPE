@@ -41,8 +41,8 @@
       }
     };
     const read = key => {
-      const text = storage?.getItem(key) || '{}';
       try {
+        const text = storage?.getItem(key) || '{}';
         const parsed = JSON.parse(text), clean = {};
         add(clean, parsed);
         return clean;
