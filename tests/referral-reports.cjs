@@ -111,3 +111,13 @@ test('report resource guard rejects missing versions and missing required resour
       'missing required resource must fail');
   }
 });
+test('report resource guard skips empty DOM attributes while still checking all required assets', () => {
+  const { assertReportAssets } = require('./helpers/report-assets.cjs');
+  const html = require('../scripts/render-daily-report.cjs').renderDailyReport({ date: '2026-11-18', text: 'ТЕСТ' });
+  const refs = [...html.matchAll(/(?:src|href)="(\.\.\/assets\/[^\"]+)"/g)].map(match => match[1]);
+  assert.equal(assertReportAssets([null, '', undefined, 42, ...refs], process.cwd()), 4);
+});
+test('report resource guard explains missing assets with AssertionError for an empty DOM attribute', () => {
+  const { assertReportAssets } = require('./helpers/report-assets.cjs');
+  assert.throws(() => assertReportAssets([null], process.cwd()), assert.AssertionError);
+});
