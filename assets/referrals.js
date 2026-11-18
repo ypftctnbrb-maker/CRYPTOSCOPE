@@ -34,7 +34,7 @@
     // The old v1 record is read as a baseline and is never rewritten by this version.
     const values = {};
     const shard = shardKey();
-    let observed = {}, records = new Map(), initialized = false;
+    let observed = {}, records = new Map(), unread = new Set(), initialized = false;
     const add = (total, parsed) => {
       for (const key of placements) if (Number.isSafeInteger(parsed?.[key]) && parsed[key] >= 0) {
         total[key] = Math.min(1e9, (total[key] || 0) + parsed[key]);
@@ -52,14 +52,16 @@
     };
     const scan = () => {
       try {
-        const next = new Map(), total = {}, baseline = read(KEY);
+        const next = new Map(), pending = new Set(), total = {}, baseline = read(KEY);
         if (baseline !== null) next.set(KEY, baseline);
+        else pending.add(KEY);
         const length = storage?.length || 0;
         for (let i = 0; i < length; i++) {
           const key = storage.key(i);
           if (key?.startsWith(SHARDS) && key !== shard) {
             const record = read(key);
             if (record !== null) next.set(key, record);
+            else pending.add(key);
           }
         }
         for (const record of next.values()) {
@@ -67,6 +69,7 @@
         }
         records = next;
         observed = total;
+        unread = pending;
         initialized = true;
       } catch (_) { /* Keep last observed totals if storage becomes unavailable. */ }
     };
@@ -75,7 +78,7 @@
       if (key === shard || !(key === KEY || key?.startsWith(SHARDS))) return;
       try {
         const old = records.get(key) || {}, next = read(key);
-        if (next === null) return; // Keep the last readable record on a failed storage event.
+        if (next === null) { unread.add(key); return; } // Keep cached counts and retry this key on the next counts().
         for (const p of placements) {
           const value = (observed[p] || 0) - (old[p] || 0) + (next[p] || 0);
           if (value > 0) observed[p] = value;
@@ -83,10 +86,12 @@
         }
         if (Object.keys(next).length) records.set(key, next);
         else records.delete(key);
+        unread.delete(key);
       } catch (_) { /* A storage failure must not block a referral link. */ }
     };
     const counts = () => {
       if (!cacheUpdates || !initialized) scan();
+      else for (const key of [...unread]) refresh(key); // Each failed key is read at most once per call, without enumeration.
       const total = {};
       add(total, observed);
       add(total, values);
