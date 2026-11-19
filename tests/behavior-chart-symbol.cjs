@@ -22,6 +22,7 @@ let clickHandler;
 const chartCalls = [];
 const tradeCalls = [];
 const metricRequests = [];
+let derivativeResponse = {};
 const context = {
   coins: [
     { id: 'bitcoin', name: 'Bitcoin', symbol: 'btc' },
@@ -32,7 +33,7 @@ const context = {
   verifiedPair: coin => coin.id === 'bitcoin' ? 'BTCUSDT' : '',
   displayPrice: () => 1, usd: String, compact: String, fmt: String,
   csText: text => text,
-  getJson: async url => { metricRequests.push(url); return {}; },
+  getJson: async url => { metricRequests.push(url); return derivativeResponse; },
   loadCandles: symbol => {
     context.chartSymbol = symbol;
     context.chartSeq++;
@@ -78,5 +79,23 @@ const clickTimeframe = tf => clickHandler({
   assert.equal(chartCalls.length, 3, 'Returning to supported coin must load candles');
   assert.equal(tradeCalls.length, 2, 'Returning to supported coin must load trades');
   assert.equal(element('nativeChart').hidden, false, 'Supported chart must be visible again');
+  for (const unavailable of [null, '', '  ', false, [], undefined]) {
+    derivativeResponse = { openInterest: unavailable, lastFundingRate: unavailable };
+    await context.openCoin('bitcoin', true);
+    assert.deepEqual(
+      [element('dOi').textContent, element('dFunding').textContent],
+      ['—', '—'],
+      `Missing derivative data must remain unavailable: ${JSON.stringify(unavailable)}`,
+    );
+  }
+  derivativeResponse = { openInterest: '0', lastFundingRate: 0 };
+  await context.openCoin('bitcoin', true);
+  assert.equal(element('dOi').textContent, '0 BTC', 'A valid zero OI must be displayed');
+  assert.equal(element('dFunding').textContent, '0%', 'A valid zero funding rate must be displayed');
+  derivativeResponse = { openInterest: '123', lastFundingRate: '-0.0001' };
+  await context.openCoin('bitcoin', true);
+  assert.equal(element('dOi').textContent, '123 BTC');
+  assert.equal(element('dFunding').textContent, '-0.01%');
+  console.log('PASS: derivative metrics distinguish missing data from reported numbers');
   console.log('PASS: supported -> unsupported -> all timeframes -> supported');
 })().catch(error => { console.error(error); process.exitCode = 1; });

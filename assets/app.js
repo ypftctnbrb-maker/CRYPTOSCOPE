@@ -219,17 +219,23 @@ async function openCoin(id, force=false) {
     loadCandles(symbol);
     loadTrades(symbol,id);
   }
+  const readMetric=value=>{
+    if(typeof value==='number'||(typeof value==='string'&&value.trim()))return Number(value);
+    return NaN;
+  };
   try {
     const [oi,funding]=await Promise.allSettled([
       getJson('https://fapi.binance.com/fapi/v1/openInterest?symbol='+encodeURIComponent(symbol)),
       getJson('https://fapi.binance.com/fapi/v1/premiumIndex?symbol='+encodeURIComponent(symbol))
     ]);
     if(detailSeq!==detailRequest)return;
-    if(oi.status==='fulfilled'&&Number.isFinite(Number(oi.value.openInterest))) {
-      $('dOi').textContent=fmt(Number(oi.value.openInterest),0)+' '+c.symbol.toUpperCase();
+    const openInterest=oi.status==='fulfilled'?readMetric(oi.value?.openInterest):NaN;
+    const fundingPercent=funding.status==='fulfilled'?readMetric(funding.value?.lastFundingRate)*100:NaN;
+    if(Number.isFinite(openInterest)&&openInterest>=0) {
+      $('dOi').textContent=fmt(openInterest,0)+' '+c.symbol.toUpperCase();
     }
-    if(funding.status==='fulfilled'&&Number.isFinite(Number(funding.value.lastFundingRate))) {
-      $('dFunding').textContent=fmt(Number(funding.value.lastFundingRate)*100,4)+'%';
+    if(Number.isFinite(fundingPercent)) {
+      $('dFunding').textContent=fmt(fundingPercent,4)+'%';
     }
     $('detailStatus').textContent='CoinGecko market data · Binance Futures derivatives where available. Chart symbol may be unavailable.';
   } catch(e) {
