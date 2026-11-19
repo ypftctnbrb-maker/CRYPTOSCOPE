@@ -10,7 +10,7 @@ fs.mkdirSync(root, { recursive: true });
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
     if (!['index.html', 'about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html',
-      'assets/app.js', 'assets/styles.css', 'assets/information.css',
+      'assets/app.js', 'assets/lightweight-charts-4.2.3.js', 'assets/styles.css', 'assets/information.css',
       'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js'].includes(file)) {
       response.writeHead(404).end();
       return;
@@ -52,11 +52,20 @@ fs.mkdirSync(root, { recursive: true });
           if (partial && n === 1) return route.fulfill({ status: 500, body: '{}' });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
+        if (url.pathname.endsWith('/klines')) {
+          return route.fulfill({ contentType: 'application/json', body: JSON.stringify([
+            [1794596400000, '100', '105', '99', '104', '12'],
+            [1794600000000, '104', '106', '103', '105', '15'],
+          ]) });
+        }
         if (url.pathname.includes('/coins/candidate')) researchCalls++;
         return route.abort();
       });
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.getElementById('status').textContent.includes('5 монет'));
+      await page.waitForFunction(() => document.querySelector('#nativeChart canvas'));
+      assert.equal(await page.evaluate(() => LightweightCharts.version()), '4.2.3');
+      assert.match(await page.locator('#chartStatus').innerText(), /Binance Spot.*BTCUSDT.*2/);
       assert.match(await page.locator('#investmentDisclaimer').innerText(), /Не является инвестиционной рекомендацией/);
       await page.locator('#major button[data-favorite="bitcoin"]').click();
       partial = true;

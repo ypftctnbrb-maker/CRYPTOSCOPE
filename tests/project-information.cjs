@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 
 const pages = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html'];
-const expectedFiles = [...pages, 'where-to-trade.html', 'assets/app.js', 'assets/styles.css', 'assets/information.css', 'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js', '.nojekyll'].sort();
+const expectedFiles = [...pages, 'where-to-trade.html', 'assets/app.js', 'assets/lightweight-charts-4.2.3.js', 'assets/lightweight-charts-LICENSE.txt', 'assets/styles.css', 'assets/information.css', 'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js', '.nojekyll'].sort();
 const read = file => fs.readFileSync(file, 'utf8');
 const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? walk(path.join(dir, entry.name)).map(file => entry.name + '/' + file) : [entry.name]);
