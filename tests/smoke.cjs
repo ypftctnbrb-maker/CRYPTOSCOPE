@@ -7,6 +7,16 @@ const js = fs.readFileSync('assets/app.js','utf8');
 const css = fs.readFileSync('assets/styles.css','utf8');
 new vm.Script(js,{filename:'assets/app.js'});
 assert.match(html,/Content-Security-Policy/,'CSP must be present');
+for (const page of fs.readdirSync('.').filter(file => file.endsWith('.html'))) {
+  const source = fs.readFileSync(page, 'utf8');
+  for (const [, attrs] of source.matchAll(/<script\b([^>]*)>/gi)) {
+    const src = attrs.match(/\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+    if (!src) continue;
+    const url = new URL(src[1] ?? src[2] ?? src[3], 'https://site.invalid/');
+    assert.equal(url.origin, 'https://site.invalid', page + ': executable script must be local: ' + url.href);
+  }
+  assert.match(source, /script-src 'self';/, page + ': CSP must limit executable scripts to the site');
+}
 assert.match(html,/assets\/app\.js\?v=/,'versioned script required');
 assert.match(html,/assets\/styles\.css\?v=/,'versioned stylesheet required');
 assert.match(js,/VERIFIED_BINANCE_PAIRS/,'explicit asset mapping required');
