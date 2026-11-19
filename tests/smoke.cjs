@@ -17,6 +17,11 @@ for (const page of fs.readdirSync('.').filter(file => file.endsWith('.html'))) {
   }
   assert.match(source, /script-src 'self';/, page + ': CSP must limit executable scripts to the site');
 }
+const fallbackFrame = html.match(/<iframe\b[^>]*\bid="detailChart"[^>]*>/i)?.[0];
+assert.ok(fallbackFrame, 'TradingView fallback iframe must exist');
+assert.match(fallbackFrame, /\bsandbox="[^"]*allow-scripts[^"]*"/, 'fallback iframe must be sandboxed');
+assert.doesNotMatch(fallbackFrame, /allow-top-navigation/, 'fallback must not allow top-level navigation');
+assert.match(fallbackFrame, /\breferrerpolicy="strict-origin"/, 'fallback must restrict referrer');
 assert.match(html,/assets\/app\.js\?v=/,'versioned script required');
 assert.match(html,/assets\/styles\.css\?v=/,'versioned stylesheet required');
 assert.match(js,/VERIFIED_BINANCE_PAIRS/,'explicit asset mapping required');
