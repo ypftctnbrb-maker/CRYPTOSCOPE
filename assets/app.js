@@ -203,7 +203,8 @@ async function openCoin(id, force=false) {
   $('detailStatus').textContent='Checking available market instruments…';
   const symbol=verifiedPair(c);
   if(!symbol) {
-    $('dCvd').textContent='—';
+    ['buyVolume','sellVolume','dCvd'].forEach(k=>$(k).textContent='—');
+    drawCvd([]);
     chartSymbol='';
     lastSpotSymbol='';
     chartSeq++;
