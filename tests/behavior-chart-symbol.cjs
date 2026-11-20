@@ -21,6 +21,7 @@ const element = id => {
 let clickHandler;
 const chartCalls = [];
 const tradeCalls = [];
+let drawnCvd = [];
 const metricRequests = [];
 let derivativeResponse = {};
 const context = {
@@ -40,6 +41,7 @@ const context = {
     chartCalls.push(symbol);
     element('nativeChart').hidden = false;
   },
+  drawCvd: points => { drawnCvd = Array.from(points); },
   loadTrades: symbol => { context.coinRequest++; tradeCalls.push(symbol); },
   document: { querySelectorAll: () => [] },
   $: id => id === 'timeframes'
@@ -68,7 +70,15 @@ const clickTimeframe = tf => clickHandler({
   const coinRequest = context.coinRequest;
   const requests = metricRequests.length;
 
+  element('buyVolume').textContent = '20 BTC';
+  element('sellVolume').textContent = '7.5 BTC';
+  drawnCvd = [20, 12.5];
   await context.openCoin('unsupported');
+  assert.equal(element('buyVolume').textContent, '—', 'Unsupported coin must clear the previous buy volume');
+  assert.equal(element('sellVolume').textContent, '—', 'Unsupported coin must clear the previous sell volume');
+  assert.deepEqual(drawnCvd, [], 'Unsupported coin must clear the previous CVD trace');
+  assert.equal(tradeCalls.length, 1, 'Unsupported coin must not request trades');
+  console.log('PASS: unsupported pair clears the previous spot flow');
   assert.equal(element('dCvd').textContent, '—', 'Unsupported coin must clear the previous CVD');
   assert.equal(context.chartSymbol, '', 'Unsupported coin must clear previous symbol');
   assert.equal(context.lastSpotSymbol, '', 'Unsupported coin must clear previous spot symbol');
