@@ -17,7 +17,8 @@ for (const page of fs.readdirSync('.').filter(file => file.endsWith('.html'))) {
   }
   assert.match(source, /script-src 'self';/, page + ': CSP must limit executable scripts to the site');
 }
-const fallbackFrame = html.match(/<iframe\b[^>]*(?<![\w-])id="detailChart"[^>]*>/i)?.[0];
+const htmlWithoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
+const fallbackFrame = htmlWithoutComments.match(/<iframe\b[^>]*(?<![\w-])id="detailChart"[^>]*>/i)?.[0];
 assert.ok(fallbackFrame, 'TradingView fallback iframe must exist');
 const sandboxValue = fallbackFrame.match(/(?<![\w-])sandbox="([^"]*)"/i)?.[1];
 assert.ok(sandboxValue !== undefined, 'fallback iframe must have a real sandbox attribute');
