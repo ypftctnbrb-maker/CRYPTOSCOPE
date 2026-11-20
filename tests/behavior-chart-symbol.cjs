@@ -57,6 +57,11 @@ const clickTimeframe = tf => clickHandler({
   await context.openCoin('bitcoin');
   assert.deepEqual(chartCalls, ['BTCUSDT'], 'Supported coin must load its chart');
   assert.deepEqual(tradeCalls, ['BTCUSDT'], 'Supported coin must load its trades');
+  element('dCvd').textContent = '+12.5 BTC';
+  await context.openCoin('bitcoin', true);
+  assert.deepEqual(tradeCalls, ['BTCUSDT'], 'Refreshing the same pair must keep the loaded trade window');
+  assert.equal(element('dCvd').textContent, '+12.5 BTC', 'A catalogue refresh must preserve the loaded CVD');
+  console.log('PASS: catalogue refresh preserves CVD for the same pair');
   clickTimeframe('4h');
   assert.equal(chartCalls.length, 2, 'Supported timeframe must reload candles');
   const chartSeq = context.chartSeq;
@@ -64,6 +69,7 @@ const clickTimeframe = tf => clickHandler({
   const requests = metricRequests.length;
 
   await context.openCoin('unsupported');
+  assert.equal(element('dCvd').textContent, '—', 'Unsupported coin must clear the previous CVD');
   assert.equal(context.chartSymbol, '', 'Unsupported coin must clear previous symbol');
   assert.equal(context.lastSpotSymbol, '', 'Unsupported coin must clear previous spot symbol');
   assert.equal(context.chartSeq, chartSeq + 1, 'Unsupported coin must invalidate pending candles');
