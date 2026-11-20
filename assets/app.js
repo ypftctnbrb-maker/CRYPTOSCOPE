@@ -199,10 +199,11 @@ async function openCoin(id, force=false) {
   $('dCap').textContent=compact(c.market_cap);
   $('dVolume').textContent=compact(c.total_volume);
   $('dChange').textContent=Number.isFinite(c.price_change_percentage_24h)?fmt(c.price_change_percentage_24h)+'%':'—';
-  ['dOi','dFunding','dCvd','dLiq'].forEach(k=>$(k).textContent='—');
+  ['dOi','dFunding','dLiq'].forEach(k=>$(k).textContent='—');
   $('detailStatus').textContent='Checking available market instruments…';
   const symbol=verifiedPair(c);
   if(!symbol) {
+    $('dCvd').textContent='—';
     chartSymbol='';
     lastSpotSymbol='';
     chartSeq++;
