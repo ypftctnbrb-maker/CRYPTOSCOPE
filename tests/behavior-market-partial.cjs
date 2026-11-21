@@ -261,3 +261,23 @@ test('one malformed row does not discard valid assets from the same market page'
   assert.match(b.element('status').textContent, /3\/4/);
   assert.equal(b.element('dot').classList.contains('ok'), false);
 });
+
+test('catalogue and ticker search include loaded coins from $1m without changing the potential list', async () => {
+  const b = browser([
+    [coin('dash', 414e6)], [coin('io', 41e6)],
+    [coin('below-floor', 999999), coin('at-floor', 1000000)],
+    [coin('above-floor', 1000001), coin('unknown-cap', null)],
+  ]);
+  await flush();
+  b.run("marketTab='all';render()");
+  const rows = id => [...b.element(id).innerHTML.matchAll(/<tr data-id="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(rows('major'), ['dash', 'io', 'above-floor', 'at-floor']);
+  assert.deepEqual(rows('small'), ['io']);
+  for (const [query, expected] of [[' DASH ', ['dash']], ['IO', ['io']], ['AKR', []],
+    ['AT-FLOOR', ['at-floor']], ['BELOW-FLOOR', []], ['UNKNOWN-CAP', ['unknown-cap']]]) {
+    b.element('search').value = query;
+    b.run("marketTab='leaders';render()");
+    assert.deepEqual(rows('major'), expected, query);
+  }
+  assert.match(b.element('major').innerHTML, /<td>—<\/td>/, 'unknown cap is shown as missing');
+});
