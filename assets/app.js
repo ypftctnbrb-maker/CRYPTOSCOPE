@@ -171,7 +171,7 @@ const usd=n=>Number.isFinite(n)?'$'+fmt(n,n<1?6:2):'—';
 const compact=n=>Number.isFinite(n)?'$'+new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(n):'—';
 let coins=[];
 
-const dict={ru:{title:'Рынок в реальном времени',subtitle:'Цены, объёмы, потоки сделок и деривативы',chart:'График',markets:'Рынок',prospects:'Перспективные',btcCap:'Капитализация BTC',btcVolume:'Объём BTC за 24 ч',candle:'BTC / USDT · TradingView',marketTitle:'Крупные монеты · от $200 млн',prospectTitle:'Монеты с потенциалом роста',prospectSub:'Кандидаты для изучения. Рыночный интерес не подтверждает активность команды и качество токеномики.',refresh:'Обновить',coin:'Монета',price:'Цена',cap:'Капитализация',volume:'Объём 24 ч',fVolume:'Объём / капитализация от 10%',fWhales:'Накопление крупных держателей · скоро',fUnlock:'Эмиссия и разлоки · скоро',fOi:'Открытый интерес · скоро',fDev:'Активность разработчиков · скоро',fLiquidity:'Объём торгов от $1 млн / 24 ч',coverage:'Охват ограничен загруженными страницами API. Отсутствие монеты не означает, что она не соответствует критериям.',risk:'Не инвестиционная рекомендация. Данные сторонних сервисов могут задерживаться или быть недоступны.'}};
+const dict={ru:{title:'Рынок в реальном времени',subtitle:'Цены, объёмы, потоки сделок и деривативы',chart:'График',markets:'Рынок',prospects:'Перспективные',btcCap:'Капитализация BTC',btcVolume:'Объём BTC за 24 ч',candle:'BTC / USDT · TradingView',marketTitle:'Рынок монет',prospectTitle:'Монеты с потенциалом роста',prospectSub:'Кандидаты для изучения. Рыночный интерес не подтверждает активность команды и качество токеномики.',refresh:'Обновить',coin:'Монета',price:'Цена',cap:'Капитализация',volume:'Объём 24 ч',fVolume:'Объём / капитализация от 10%',fWhales:'Накопление крупных держателей · скоро',fUnlock:'Эмиссия и разлоки · скоро',fOi:'Открытый интерес · скоро',fDev:'Активность разработчиков · скоро',fLiquidity:'Объём торгов от $1 млн / 24 ч',coverage:'Охват ограничен загруженными страницами API. Отсутствие монеты не означает, что она не соответствует критериям.',risk:'Не инвестиционная рекомендация. Данные сторонних сервисов могут задерживаться или быть недоступны.'}};
 function csText(value){return value}
 function translate(){document.documentElement.lang='ru';document.documentElement.dir='ltr';document.querySelectorAll('[data-i]').forEach(el=>{const value=dict.ru[el.dataset.i];if(value)el.textContent=value});render()}
 function row(c) {
@@ -381,17 +381,20 @@ async function inspectPotential(id,force=false) {
   }
 }
 $('researchRefresh').addEventListener('click',()=>{if(researchCoinId)inspectPotential(researchCoinId,true);});
+const catalogueFloor=1e6;
+const catalogueEligible=c=>Number.isFinite(c.market_cap)&&c.market_cap>=catalogueFloor;
+const searchEligible=c=>catalogueEligible(c)||!Number.isFinite(c.market_cap);
 let marketTab='leaders',majorShown=5,smallShown=5;let favoriteIds=new Set();try{const stored=JSON.parse(localStorage.getItem('cs-favorites')||'[]');if(Array.isArray(stored))favoriteIds=new Set(stored.filter(x=>typeof x==='string').slice(0,300))}catch(e){}function saveFavorites(){try{localStorage.setItem('cs-favorites',JSON.stringify([...favoriteIds]))}catch(e){}}function rowWithFavorite(c){const r=row(c);return r.replace('</tr>','<td class="favorite-cell"><button class="favorite-toggle'+(favoriteIds.has(c.id)?' is-favorite':'')+'" data-favorite="'+escapeHtml(c.id)+'" aria-label="'+(favoriteIds.has(c.id)?'Убрать из избранного':'Добавить в избранное')+'" aria-pressed="'+favoriteIds.has(c.id)+'">'+(favoriteIds.has(c.id)?'★':'☆')+'</button></td></tr>')}function render() {
   const query=$('search').value.toLowerCase().trim(),sort=$('sort').value;
   const base=coins.filter(c=>(c.name+' '+c.symbol).toLowerCase().includes(query));
   const numeric=(c,k)=>Number.isFinite(Number(c[k]))?Number(c[k]):-Infinity;
   const sorted=base.sort((a,b)=>numeric(b,sort)-numeric(a,sort));
-  let major=sorted.filter(c=>c.market_cap>=200e6);
-  if(marketTab==='gainers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h>0)
+  let major=sorted.filter(query?searchEligible:marketTab==='all'?catalogueEligible:c=>c.market_cap>=200e6);
+  if(!query&&marketTab==='gainers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h>0)
     .sort((a,b)=>b.price_change_percentage_24h-a.price_change_percentage_24h);
-  if(marketTab==='losers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h<0)
+  if(!query&&marketTab==='losers')major=major.filter(c=>Number.isFinite(c.price_change_percentage_24h)&&c.price_change_percentage_24h<0)
     .sort((a,b)=>a.price_change_percentage_24h-b.price_change_percentage_24h);
-  if(marketTab==='favorites')major=sorted.filter(c=>favoriteIds.has(c.id));
+  if(!query&&marketTab==='favorites')major=sorted.filter(c=>favoriteIds.has(c.id));
   const small=sorted.filter(c=>c.market_cap>=20e6&&c.market_cap<200e6&&Number.isFinite(c.total_volume)&&
     c.total_volume>=1e6&&c.market_cap>0&&c.total_volume/c.market_cap>=.1);
   const shownMajor=major.slice(0,majorShown),shownSmall=small.slice(0,smallShown);
@@ -400,13 +403,13 @@ let marketTab='leaders',majorShown=5,smallShown=5;let favoriteIds=new Set();try{
   $('small').innerHTML=shownSmall.length?shownSmall.map(c=>rowWithFavorite(c).replace('</tr>',
     '<td class="research-cell"><button class="research-button" data-research="'+escapeHtml(c.id)+'">Проверить</button></td></tr>')).join(''):
     '<tr><td colspan="8" class="loading">Нет подходящих монет</td></tr>';
-  $('majorMore').hidden=majorShown>=major.length||marketTab!=='all';
+  $('majorMore').hidden=majorShown>=major.length||(!query&&marketTab!=='all');
   $('smallMore').hidden=smallShown>=small.length;
   $('majorCount').textContent=csText('Показано ')+shownMajor.length+csText(' из ')+major.length;
   $('smallCount').textContent=csText('Показано ')+shownSmall.length+csText(' из ')+small.length;
-  $('marketHint').textContent=({leaders:csText('Топ-5 по капитализации'),gainers:csText('Топ-5 по росту за 24 часа'),
+  $('marketHint').textContent=query?csText('Поиск по загруженным монетам'):({leaders:csText('Топ-5 по капитализации'),gainers:csText('Топ-5 по росту за 24 часа'),
     losers:csText('Топ-5 по падению за 24 часа'),favorites:csText('Сохранённые монеты на этом устройстве'),
-    all:csText('Каталог монет · по 20 за раз')})[marketTab];
+    all:csText('Каталог монет от $1 млн · по 20 за раз')})[marketTab];
   document.querySelectorAll('#marketTabs button').forEach(btn=>{
     const active=btn.dataset.marketTab===marketTab;
     btn.classList.toggle('active',active);
@@ -596,9 +599,10 @@ clearTimeout(searchTimer);
 const q=$('search').value.trim().toLowerCase();
 if(!q){const btc=coins.find(c=>c.id==='bitcoin');
 if(btc)openCoin(btc.id);
-return}searchTimer=setTimeout(()=>{const matches=coins.filter(c=>c.symbol.toLowerCase()===q||c.name.toLowerCase()===q);
+return}searchTimer=setTimeout(()=>{const searchable=coins.filter(searchEligible);
+const matches=searchable.filter(c=>c.symbol.toLowerCase()===q||c.name.toLowerCase()===q);
 const candidate=matches[0]||
-  coins.filter(c=>c.symbol.toLowerCase().startsWith(q)||c.name.toLowerCase().startsWith(q)).sort((a,b)=>(b.market_cap||0)-(a.market_cap||0))[0];
+  searchable.filter(c=>c.symbol.toLowerCase().startsWith(q)||c.name.toLowerCase().startsWith(q)).sort((a,b)=>(b.market_cap||0)-(a.market_cap||0))[0];
 if(candidate)openCoin(candidate.id);
 else{lastSpotSymbol='';
 selectedCoinId='';
