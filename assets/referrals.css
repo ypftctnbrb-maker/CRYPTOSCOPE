@@ -18,6 +18,7 @@ header .referral-block{max-width:360px;margin:0}.referral-slot{min-width:0;max-w
  .market .referral-trade-heading,.market .referral-trade-cell{display:block!important;grid-column:1/-1;max-width:100%;overflow:visible}
  .market .referral-trade-heading{text-align:left}.market .referral-trade-cell .referral-block{width:100%;padding:8px}
  .market .referral-trade-cell .referral-link{width:auto}.market td[colspan]{grid-column:1/-1}
+ #prospects .market .referral-trade-cell .referral-link{display:flex;width:max-content;max-width:100%;margin-inline-start:auto}
 }
 
 .referral-mobile[hidden]{display:none!important}.referral-mobile{position:relative;background:#0d1524;padding:0 8px;z-index:6}
