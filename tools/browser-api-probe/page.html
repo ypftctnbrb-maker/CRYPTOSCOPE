@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser/API Probe</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./ui.mjs"></script>
+</head>
+<body>
+<main>
+  <h1>Browser/API Probe</h1>
+  <p>Локальные заглушки REST и WebSocket. Биржевые API не используются.</p>
+  <form id="settings">
+    <label>Сценарий<select id="scenario"></select></label>
+    <label>Инструмент<select id="instrument"><option value="spot">Spot</option><option value="futures">Perpetual futures</option></select></label>
+    <label>Повторы<input id="repeats" type="number" min="1" max="30" value="30" required></label>
+    <label>Браузер и версия<input id="browser" maxlength="80" placeholder="Например, Chromium 156" required></label>
+    <label>ОС и версия<input id="os" maxlength="80" placeholder="Например, Linux" required></label>
+    <label>Тип сети<input id="network" maxlength="60" placeholder="Например, Wi-Fi" required></label>
+    <label>Регион<input id="region" maxlength="60" placeholder="Страна или крупный регион" required></label>
+    <p>Вводите только технические сведения. Не указывайте IP, имена или адреса. 30 повторов — начальная разведка.</p>
+    <div class="actions">
+      <button id="start">Запустить</button>
+      <button id="stop" type="button" disabled>Остановить после текущего</button>
+    </div>
+  </form>
+  <p id="progress" role="status">Ожидание запуска</p>
+  <div class="actions">
+    <button id="json" type="button" disabled>Скачать JSON</button>
+    <button id="csv" type="button" disabled>Скачать CSV</button>
+  </div>
+  <div class="scroll" role="region" aria-label="Результаты испытаний" tabindex="0">
+    <table>
+      <thead><tr><th scope="col">Повтор</th><th scope="col">Проверка</th><th scope="col">Статус</th><th scope="col">Наблюдение</th></tr></thead>
+      <tbody id="results"></tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>
