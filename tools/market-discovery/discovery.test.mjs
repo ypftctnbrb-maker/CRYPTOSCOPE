@@ -58,3 +58,25 @@ test('429 retries once using Retry-After, with no third request', async () => {
   assert.deepEqual([calls, ...delays], [2, 1000]);
   assert.deepEqual(evidence.map(entry => entry.http), [429, 429]);
 });
+
+test('Hyperliquid preserves token identity and separates each builder DEX', async () => {
+  const { venues } = await import('./venues.mjs');
+  const result = await venues.hyperliquid(async (_, body) => {
+    if (body.type === 'spotMeta') return {
+      tokens: [{ index: 0, name: 'USDC', tokenId: 'quote' },
+        { index: 1, name: 'SAME', tokenId: 'a' }, { index: 2, name: 'SAME', tokenId: 'b' }],
+      universe: [{ index: 10, tokens: [1, 0] }, { index: 11, tokens: [2, 0] }],
+    };
+    if (body.type === 'perpDexs') return [null, { name: 'dex1' }, { name: 'dex2' }];
+    if (body.dex === 'dex2') throw Error('HTTP 503');
+    return { collateralToken: 0, universe: [
+      { name: body.dex ? 'dex1:SAME' : 'SAME', szDecimals: 3 },
+      { name: 'OLD', isDelisted: true },
+    ] };
+  });
+  assert.deepEqual(result.map(scope => [scope.scope, scope.count]),
+    [['spot', 2], ['perp', 1], ['perp:dex1', 1], ['perp:dex2', null]]);
+  assert.deepEqual(result[0].markets.map(market => [market.id, market.base, ...market.assetIds]),
+    [['@10', 'SAME', 'a', 'quote'], ['@11', 'SAME', 'b', 'quote']]);
+  assert.equal(result[2].markets[0].settle, 'USDC');
+});

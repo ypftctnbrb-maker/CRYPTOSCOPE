@@ -1,0 +1,1487 @@
+{
+  "completedAt": "2026-11-24T21:20:30.393Z",
+  "node": "v24.22.1",
+  "ccxt": {
+    "packageVersion": "4.5.94",
+    "runtimeVersion": "4.5.93",
+    "license": "MIT"
+  },
+  "results": [
+    {
+      "name": "bybit",
+      "direct": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 499,
+          "observedActiveCount": 499,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "linear",
+          "status": "complete",
+          "count": 902,
+          "observedActiveCount": 902,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "inverse",
+          "status": "complete",
+          "count": 22,
+          "observedActiveCount": 22,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        }
+      ],
+      "reference": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 499,
+          "observedActiveCount": 499,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 924,
+          "observedActiveCount": 924,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 7,
+          "error": null
+        }
+      ],
+      "probes": {
+        "spot": {
+          "symbol": "BTC/USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555206430
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            }
+          },
+          "websocket": {
+            "url": "wss://stream.bybit.com/v5/public/spot",
+            "subscription": {
+              "op": "subscribe",
+              "args": [
+                "publicTrade.BTCUSDT"
+              ]
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555209781
+            },
+            "startedAt": "2026-11-24T21:20:06.941Z",
+            "elapsedMs": 2927
+          }
+        },
+        "perp": {
+          "symbol": "BTC/USDT:USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555206384
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            },
+            "fetchOpenInterest": {
+              "status": "observed",
+              "timestamp": 1795554000000
+            },
+            "fetchFundingRate": {
+              "status": "observed",
+              "timestamp": 1795555208848
+            }
+          },
+          "websocket": {
+            "url": "wss://stream.bybit.com/v5/public/linear",
+            "subscription": {
+              "op": "subscribe",
+              "args": [
+                "publicTrade.BTCUSDT"
+              ]
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555207769
+            },
+            "startedAt": "2026-11-24T21:20:06.943Z",
+            "elapsedMs": 917
+          }
+        }
+      },
+      "comparison": [
+        {
+          "type": "spot",
+          "status": "complete",
+          "direct": 499,
+          "ccxt": 499,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        },
+        {
+          "type": "perp",
+          "status": "complete",
+          "direct": 924,
+          "ccxt": 924,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        }
+      ],
+      "directControls": {},
+      "http": [
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=spot",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:05.156Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:05 GMT",
+          "retryAfter": null,
+          "elapsedMs": 1276
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:05.169Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:05 GMT",
+          "retryAfter": null,
+          "elapsedMs": 832
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=inverse&limit=1000",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:05.170Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:05 GMT",
+          "retryAfter": null,
+          "elapsedMs": 672
+        }
+      ],
+      "ccxtHttp": [
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=spot",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:05.203Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:05.300Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000&status=PreLaunch",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:05.400Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=inverse&limit=1000",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:05.500Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/instruments-info?category=inverse&limit=1000&status=PreLaunch",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:05.599Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/recent-trade?symbol=BTCUSDT&limit=2&category=spot",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:07.046Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/recent-trade?symbol=BTCUSDT&limit=2&category=linear",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:07.144Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/kline?symbol=BTCUSDT&limit=2&interval=1&category=linear",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:07.453Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/kline?symbol=BTCUSDT&limit=2&interval=1&category=spot",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:07.610Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/open-interest?symbol=BTCUSDT&intervalTime=1h&category=linear",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:08.150Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.bybit.com/v5/market/tickers?symbol=BTCUSDT&category=linear",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:08.724Z",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "name": "hyperliquid",
+      "direct": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 356,
+          "observedActiveCount": 356,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 179,
+          "observedActiveCount": 179,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 56,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:xyz",
+          "status": "complete",
+          "count": 125,
+          "observedActiveCount": 125,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 24,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:flx",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 16,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:vntl",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 15,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:hyna",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 25,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:km",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 23,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:abcd",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 1,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:cash",
+          "status": "complete",
+          "count": 0,
+          "observedActiveCount": 0,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 17,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:para",
+          "status": "complete",
+          "count": 33,
+          "observedActiveCount": 33,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 7,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:mkts",
+          "status": "complete",
+          "count": 1,
+          "observedActiveCount": 1,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 23,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp:io",
+          "status": "complete",
+          "count": 19,
+          "observedActiveCount": 19,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 7,
+          "error": null,
+          "pages": 1
+        }
+      ],
+      "reference": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 352,
+          "observedActiveCount": 352,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 357,
+          "observedActiveCount": 357,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 214,
+          "error": null
+        }
+      ],
+      "probes": {
+        "spot": {
+          "symbol": "BTC/USDC",
+          "metrics": {
+            "fetchTrades": {
+              "status": "unavailable",
+              "error": "hyperliquid fetchTrades() requires a user parameter inside 'params' or the wallet address set"
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            }
+          },
+          "websocket": {
+            "url": "wss://api.hyperliquid.xyz/ws",
+            "subscription": {
+              "method": "subscribe",
+              "subscription": {
+                "type": "trades",
+                "coin": "@142"
+              }
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555113677,
+              "coin": "@142"
+            },
+            "startedAt": "2026-11-24T21:20:13.027Z",
+            "elapsedMs": 662
+          }
+        },
+        "perp": {
+          "symbol": "BTC/USDC:USDC",
+          "metrics": {
+            "fetchTrades": {
+              "status": "unavailable",
+              "error": "hyperliquid fetchTrades() requires a user parameter inside 'params' or the wallet address set"
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            },
+            "fetchOpenInterest": {
+              "status": "observed",
+              "timestamp": null
+            },
+            "fetchFundingRate": {
+              "status": "observed",
+              "timestamp": null
+            }
+          },
+          "websocket": {
+            "url": "wss://api.hyperliquid.xyz/ws",
+            "subscription": {
+              "method": "subscribe",
+              "subscription": {
+                "type": "trades",
+                "coin": "BTC"
+              }
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555205057,
+              "coin": "BTC"
+            },
+            "startedAt": "2026-11-24T21:20:13.029Z",
+            "elapsedMs": 683
+          }
+        }
+      },
+      "comparison": [
+        {
+          "type": "spot",
+          "status": "complete",
+          "direct": 356,
+          "ccxt": 352,
+          "onlyDirect": [
+            [
+              "spot",
+              "@129"
+            ],
+            [
+              "spot",
+              "@18"
+            ],
+            [
+              "spot",
+              "@189"
+            ],
+            [
+              "spot",
+              "@43"
+            ]
+          ],
+          "onlyCcxt": []
+        },
+        {
+          "type": "perp",
+          "status": "complete",
+          "direct": 357,
+          "ccxt": 357,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        }
+      ],
+      "directControls": {
+        "perpTrades": {
+          "coin": "BTC",
+          "status": "observed",
+          "timestamp": 1795555214816
+        },
+        "spotTrades": {
+          "coin": "@142",
+          "status": "observed",
+          "timestamp": 1795555202647
+        }
+      },
+      "http": [
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "spotMeta"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:05.189Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:05 GMT",
+          "retryAfter": null,
+          "elapsedMs": 720
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "perpDexs"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:05.911Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:06 GMT",
+          "retryAfter": null,
+          "elapsedMs": 296
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:06.207Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:06 GMT",
+          "retryAfter": null,
+          "elapsedMs": 263
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "xyz"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:06.471Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:06 GMT",
+          "retryAfter": null,
+          "elapsedMs": 474
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "flx"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:06.945Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:07 GMT",
+          "retryAfter": null,
+          "elapsedMs": 202
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "vntl"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:07.147Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:07 GMT",
+          "retryAfter": null,
+          "elapsedMs": 416
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "hyna"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:07.563Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:07 GMT",
+          "retryAfter": null,
+          "elapsedMs": 225
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "km"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:07.788Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:07 GMT",
+          "retryAfter": null,
+          "elapsedMs": 219
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "abcd"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:08.007Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:08 GMT",
+          "retryAfter": null,
+          "elapsedMs": 513
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "cash"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:08.520Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:08 GMT",
+          "retryAfter": null,
+          "elapsedMs": 236
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "para"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:08.756Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:09 GMT",
+          "retryAfter": null,
+          "elapsedMs": 446
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "mkts"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:09.203Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:09 GMT",
+          "retryAfter": null,
+          "elapsedMs": 652
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "meta",
+            "dex": "io"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:09.855Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:09 GMT",
+          "retryAfter": null,
+          "elapsedMs": 214
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "recentTrades",
+            "coin": "BTC"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.324Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:15 GMT",
+          "retryAfter": null,
+          "elapsedMs": 229
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "body": {
+            "type": "recentTrades",
+            "coin": "@142"
+          },
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.325Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:15 GMT",
+          "retryAfter": null,
+          "elapsedMs": 432
+        }
+      ],
+      "ccxtHttp": [
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:05.202Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:06.452Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:06.953Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:07.452Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:08.256Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:08.756Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:09.257Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:09.757Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:10.257Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:10.756Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:11.256Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:11.757Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:12.257Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:12.757Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:13.529Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:13.728Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:14.130Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.hyperliquid.xyz/info",
+          "method": "POST",
+          "retrievedAt": "2026-11-24T21:20:15.054Z",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "name": "okx",
+      "direct": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 1250,
+          "observedActiveCount": 1250,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "swap",
+          "status": "complete",
+          "count": 550,
+          "observedActiveCount": 550,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        }
+      ],
+      "reference": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 1250,
+          "observedActiveCount": 1250,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 550,
+          "observedActiveCount": 550,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        }
+      ],
+      "probes": {
+        "spot": {
+          "symbol": "BTC/USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555213938
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            }
+          },
+          "websocket": {
+            "url": "wss://ws.okx.com:8443/ws/v5/public",
+            "subscription": {
+              "op": "subscribe",
+              "args": [
+                {
+                  "channel": "trades",
+                  "instId": "BTC-USDT"
+                }
+              ]
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": "1795555221290"
+            },
+            "startedAt": "2026-11-24T21:20:16.316Z",
+            "elapsedMs": 5033
+          }
+        },
+        "perp": {
+          "symbol": "BTC/USDT:USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555212942
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            },
+            "fetchOpenInterest": {
+              "status": "observed",
+              "timestamp": 1795555216938
+            },
+            "fetchFundingRate": {
+              "status": "observed",
+              "timestamp": null
+            }
+          },
+          "websocket": {
+            "url": "wss://ws.okx.com:8443/ws/v5/public",
+            "subscription": {
+              "op": "subscribe",
+              "args": [
+                {
+                  "channel": "trades",
+                  "instId": "BTC-USDT-SWAP"
+                }
+              ]
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": "1795555217411"
+            },
+            "startedAt": "2026-11-24T21:20:16.317Z",
+            "elapsedMs": 1150
+          }
+        }
+      },
+      "comparison": [
+        {
+          "type": "spot",
+          "status": "complete",
+          "direct": 1250,
+          "ccxt": 1250,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        },
+        {
+          "type": "perp",
+          "status": "complete",
+          "direct": 550,
+          "ccxt": 550,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        }
+      ],
+      "directControls": {},
+      "http": [
+        {
+          "url": "https://www.okx.com/api/v5/public/instruments?instType=SPOT",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.758Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:16 GMT",
+          "retryAfter": null,
+          "elapsedMs": 495
+        },
+        {
+          "url": "https://www.okx.com/api/v5/public/instruments?instType=SWAP",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.758Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:16 GMT",
+          "retryAfter": null,
+          "elapsedMs": 501
+        }
+      ],
+      "ccxtHttp": [
+        {
+          "url": "https://www.okx.com/api/v5/public/instruments?instType=SPOT",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:15.787Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/public/instruments?instType=SWAP",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:15.894Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/market/trades?instId=BTC-USDT&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.427Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/market/trades?instId=BTC-USDT-SWAP&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.449Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=1m&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.614Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=1m&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.669Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/public/open-interest?instType=SWAP&uly=BTC-USDT&instId=BTC-USDT-SWAP",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.817Z",
+          "http": 200
+        },
+        {
+          "url": "https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:17.111Z",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "name": "bitfinex",
+      "direct": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 196,
+          "observedActiveCount": 196,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 94,
+          "observedActiveCount": 94,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        }
+      ],
+      "reference": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 196,
+          "observedActiveCount": 196,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 94,
+          "observedActiveCount": 94,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        }
+      ],
+      "probes": {
+        "spot": {
+          "symbol": "BTC/USD",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555209846
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            }
+          },
+          "websocket": {
+            "url": "wss://api-pub.bitfinex.com/ws/2",
+            "subscription": {
+              "event": "subscribe",
+              "channel": "trades",
+              "symbol": "tBTCUSD"
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555221357
+            },
+            "startedAt": "2026-11-24T21:20:16.830Z",
+            "elapsedMs": 4625
+          }
+        },
+        "perp": {
+          "symbol": "BTC/USDT:USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555218046
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            },
+            "fetchOpenInterest": {
+              "status": "observed",
+              "timestamp": 1795555218000
+            },
+            "fetchFundingRate": {
+              "status": "observed",
+              "timestamp": 1795555218000
+            }
+          },
+          "websocket": {
+            "url": "wss://api-pub.bitfinex.com/ws/2",
+            "subscription": {
+              "event": "subscribe",
+              "channel": "trades",
+              "symbol": "tBTCF0:USTF0"
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555217503
+            },
+            "startedAt": "2026-11-24T21:20:16.831Z",
+            "elapsedMs": 821
+          }
+        }
+      },
+      "comparison": [
+        {
+          "type": "spot",
+          "status": "complete",
+          "direct": 196,
+          "ccxt": 196,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        },
+        {
+          "type": "perp",
+          "status": "complete",
+          "direct": 94,
+          "ccxt": 94,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        }
+      ],
+      "directControls": {},
+      "http": [
+        {
+          "url": "https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.772Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:15 GMT",
+          "retryAfter": null,
+          "elapsedMs": 231
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/conf/pub:list:pair:futures",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:15.773Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:15 GMT",
+          "retryAfter": null,
+          "elapsedMs": 231
+        }
+      ],
+      "ccxtHttp": [
+        {
+          "url": "https://api-pub.bitfinex.com/v2/conf/pub:list:currency,pub:map:currency:sym,pub:map:currency:label,pub:map:currency:unit,pub:map:currency:undl,pub:map:currency:pool,pub:map:currency:explorer,pub:map:currency:tx:fee,pub:map:tx:method,pub:info:tx:status,pub:list:currency:margin",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:15.786Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/conf/pub:info:pair,pub:info:pair:futures,pub:list:pair:securities,pub:list:pair:margin",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:16.672Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/trades/tBTCUSD/hist?limit=2&sort=-1",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:17.505Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/trades/tBTCF0:USTF0/hist?limit=2&sort=-1",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:18.180Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/candles/trade:1m:tBTCUSD/hist?limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:18.856Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/candles/trade:1m:tBTCF0:USTF0/hist?limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:19.530Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/status/deriv?keys=tBTCF0%3AUSTF0",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:20.498Z",
+          "http": 200
+        },
+        {
+          "url": "https://api-pub.bitfinex.com/v2/status/deriv?keys=tBTCF0%3AUSTF0",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:21.464Z",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "name": "mexc",
+      "direct": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 1634,
+          "observedActiveCount": 1634,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 63,
+          "error": null,
+          "pages": 1
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 1175,
+          "observedActiveCount": 1175,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null,
+          "pages": 1
+        }
+      ],
+      "reference": [
+        {
+          "scope": "spot",
+          "status": "complete",
+          "count": 1634,
+          "observedActiveCount": 1634,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 63,
+          "error": null
+        },
+        {
+          "scope": "perp",
+          "status": "complete",
+          "count": 1175,
+          "observedActiveCount": 1175,
+          "duplicateCount": 0,
+          "unknownCount": 0,
+          "inactiveCount": 0,
+          "error": null
+        }
+      ],
+      "probes": {
+        "spot": {
+          "symbol": "BTC/USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555226000
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            }
+          },
+          "websocket": {
+            "url": "wss://wbs-api.mexc.com/ws",
+            "subscription": {
+              "method": "SUBSCRIPTION",
+              "params": [
+                "spot@public.aggre.deals.v3.api.pb@100ms@BTCUSDT"
+              ]
+            },
+            "status": "binary-envelope-only",
+            "evidence": {
+              "status": "binary-envelope-only",
+              "bytes": 337
+            },
+            "startedAt": "2026-11-24T21:20:23.570Z",
+            "elapsedMs": 1385
+          }
+        },
+        "perp": {
+          "symbol": "BTC/USDT:USDT",
+          "metrics": {
+            "fetchTrades": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555228071
+            },
+            "fetchOHLCV": {
+              "status": "observed",
+              "count": 2,
+              "timestamp": 1795555200000
+            },
+            "fetchOpenInterest": {
+              "status": "not-run",
+              "reason": "CCXT capability not advertised"
+            },
+            "fetchFundingRate": {
+              "status": "observed",
+              "timestamp": 1795555229993
+            }
+          },
+          "websocket": {
+            "url": "wss://contract.mexc.com/edge",
+            "subscription": {
+              "method": "sub.deal",
+              "param": {
+                "symbol": "BTC_USDT"
+              }
+            },
+            "status": "observed",
+            "evidence": {
+              "timestamp": 1795555224257
+            },
+            "startedAt": "2026-11-24T21:20:23.572Z",
+            "elapsedMs": 803
+          }
+        }
+      },
+      "comparison": [
+        {
+          "type": "spot",
+          "status": "complete",
+          "direct": 1634,
+          "ccxt": 1634,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        },
+        {
+          "type": "perp",
+          "status": "complete",
+          "direct": 1175,
+          "ccxt": 1175,
+          "onlyDirect": [],
+          "onlyCcxt": []
+        }
+      ],
+      "directControls": {
+        "perpOpenInterest": {
+          "status": "observed",
+          "contracts": 500450416,
+          "timestamp": 1795555226879
+        }
+      },
+      "http": [
+        {
+          "url": "https://api.mexc.com/api/v3/exchangeInfo",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:21.556Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:22 GMT",
+          "retryAfter": null,
+          "elapsedMs": 780
+        },
+        {
+          "url": "https://contract.mexc.com/api/v1/contract/detail",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:21.556Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:22 GMT",
+          "retryAfter": null,
+          "elapsedMs": 870
+        },
+        {
+          "url": "https://contract.mexc.com/api/v1/contract/ticker?symbol=BTC_USDT",
+          "body": null,
+          "attempt": 1,
+          "retrievedAt": "2026-11-24T21:20:30.087Z",
+          "http": 200,
+          "serverDate": "Tue, 24 Nov 2026 21:20:30 GMT",
+          "retryAfter": null,
+          "elapsedMs": 306
+        }
+      ],
+      "ccxtHttp": [
+        {
+          "url": "https://api.mexc.com/api/v3/exchangeInfo",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:21.568Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v1/contract/detail",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:22.817Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v3/aggTrades?symbol=BTCUSDT&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:28.573Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v1/contract/deals/BTC_USDT?limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:28.622Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=2",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:29.275Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v1/contract/kline/BTC_USDT?interval=Min1",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:29.326Z",
+          "http": 200
+        },
+        {
+          "url": "https://api.mexc.com/api/v1/contract/funding_rate/BTC_USDT",
+          "method": "GET",
+          "retrievedAt": "2026-11-24T21:20:29.836Z",
+          "http": 200
+        }
+      ]
+    }
+  ]
+}
