@@ -3,6 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
+async function expectPoll(predicate, message) {
+  const deadline = Date.now() + 5000;
+  while (!(await predicate())) {
+    assert.ok(Date.now() < deadline, message);
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+}
 const root = process.env.QA_ARTIFACT_DIR || path.join(process.env.RUNNER_TEMP || '/tmp', 'cryptoscope-browser-qa');
 fs.mkdirSync(root, { recursive: true });
 (async () => {
@@ -28,6 +35,14 @@ fs.mkdirSync(root, { recursive: true });
     args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     for (const width of [360, 390, 768, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const streams = new Map();
+      const candleRequests = [];
+      await page.routeWebSocket(/stream\.binance\.com/, socket => {
+        const stream = new URL(socket.url()).pathname.split('/').pop();
+        const connections = streams.get(stream) || [];
+        connections.push(socket);
+        streams.set(stream, connections);
+      });
       let partial = false, limited = false, calls = 0, researchCalls = 0;
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -53,6 +68,7 @@ fs.mkdirSync(root, { recursive: true });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
         if (url.pathname.endsWith('/klines')) {
+          candleRequests.push(url.searchParams.get('symbol') + ':' + url.searchParams.get('interval'));
           if (url.searchParams.get('symbol') === 'PEPEUSDT') {
             return route.fulfill({ json: [
               [1794596400000, '0.00000300', '0.00000302', '0.00000299', '0.00000301', '12'],
@@ -84,6 +100,11 @@ fs.mkdirSync(root, { recursive: true });
               window.testCandleSeries = series;
               return series;
             };
+            const addHistogramSeries = chart.addHistogramSeries.bind(chart);
+            chart.addHistogramSeries = options => {
+              window.testVolumeSeries = addHistogramSeries(options);
+              return window.testVolumeSeries;
+            };
             return chart;
           } };
         });
@@ -103,6 +124,54 @@ fs.mkdirSync(root, { recursive: true });
           console.log(`Candlestick formatter ${pair} 5m: ${actual.join(', ')}`);
           assert.deepEqual(actual, labels, pair + ' price labels must preserve distinct adjacent prices');
         }
+        const stream = 'pepeusdt@kline_5m';
+        const waitForStream = async (name, count) => {
+          await expectPoll(() => (streams.get(name)?.length || 0) >= count, 'missing WebSocket ' + name);
+          return streams.get(name)[count - 1];
+        };
+        const send = (socket, time, eventTime, close, volume) => socket.send(JSON.stringify({
+          e: 'kline', E: eventTime, s: 'PEPEUSDT',
+          k: { t: time, T: time + 299999, i: '5m',
+            o: '0.00000301', h: '0.00000312', l: '0.00000300', c: close, v: volume },
+        }));
+        const readLatest = () => page.evaluate(() => [
+          window.testCandleSeries.data().at(-1).close,
+          window.testVolumeSeries.data().at(-1).value,
+          window.testCandleSeries.data().length,
+        ]);
+        const expectLatest = async expected => {
+          await expectPoll(async () => JSON.stringify(await readLatest()) === JSON.stringify(expected),
+            'expected candle close, volume, count: ' + expected);
+        };
+        const last = 1794596700000;
+        const original = await readLatest();
+        console.log('PEPE before live fixture:', original);
+        const socket = await waitForStream(stream, 2);
+        send(socket, last, last + 1000, '0.00000303', '21');
+        await expectLatest([0.00000303, 21, 2]);
+        send(socket, last, last + 1000, '0.00000302', '15');
+        send(socket, last + 300000, last + 301000, '0.00000304', '5');
+        await expectLatest([0.00000304, 5, 3]);
+        assert.deepEqual(await page.evaluate(() => [
+          window.testCandleSeries.data().at(-2).close, window.testVolumeSeries.data().at(-2).value,
+        ]), [0.00000303, 21], 'duplicate must not overwrite the latest snapshot');
+        const requestsBeforeGap = candleRequests.length;
+        send(socket, last + 900000, last + 901000, '0.00000312', '75');
+        await expectPoll(() => candleRequests.length > requestsBeforeGap, 'gap must trigger REST backfill');
+        const restored = await waitForStream(stream, 3);
+        send(restored, last, last + 2000, '0.00000306', '26');
+        await expectLatest([0.00000306, 26, 2]);
+        await page.clock.fastForward(16000);
+        await page.waitForFunction(() => document.querySelector('#chartStatus').textContent.includes('устарели'));
+        const reconnected = await waitForStream(stream, 4);
+        send(reconnected, last, last + 3000, '0.00000307', '27');
+        await expectLatest([0.00000307, 27, 2]);
+        assert.match(await page.locator('#chartStatus').innerText(), /LIVE/);
+        await page.locator('#timeframes button[data-tf="15m"]').click();
+        await waitForStream('pepeusdt@kline_15m', 1);
+        await page.locator('#timeframes button[data-tf="5m"]').click();
+        await waitForStream(stream, 5);
+        console.log('PASS: candle updates, rollover, duplicate, gap backfill, stale recovery, timeframe switch');
         await page.locator('#search').fill('');
         await page.waitForFunction(() => /BTCUSDT · 5m · 2/.test(document.querySelector('#chartStatus').textContent));
       }
