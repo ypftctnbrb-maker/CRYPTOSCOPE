@@ -184,7 +184,197 @@ function row(c) {
     '</td><td>'+compact(c.market_cap)+'</td><td>'+compact(c.total_volume)+'</td></tr>';
 }
 function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-let coinRequest=0;let selectedCoinId='';let detailRequest=0;let lastCoinId='';let lastSpotSymbol='';function drawCvd(values){const canvas=$('cvdCanvas'),w=Math.max(280,canvas.clientWidth),h=220,dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#33445e';ctx.lineWidth=1;for(let i=0;i<5;i++){const y=12+i*(h-24)/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}if(!values.length)return;let lo=Math.min(0,...values),hi=Math.max(0,...values);if(hi===lo){hi+=1;lo-=1}const y=v=>h-12-(v-lo)/(hi-lo)*(h-24);ctx.strokeStyle='#56b9ff';ctx.lineWidth=2.5;ctx.beginPath();values.forEach((v,i)=>{const x=i/(values.length-1||1)*(w-1);if(!i)ctx.moveTo(x,y(v));else ctx.lineTo(x,y(v))});ctx.stroke();ctx.fillStyle='#94a6bf';ctx.font='12px system-ui';ctx.fillText('CVD: '+fmt(values[values.length-1],4),10,19)}async function loadTrades(symbol,id){const seq=++coinRequest;$('buyVolume').textContent='—';$('sellVolume').textContent='—';$('dCvd').textContent='—';$('flowStatus').textContent=csText('Загрузка исторических агрегированных сделок Binance Spot…');drawCvd([]);try{const endpoint='https://api.binance.com/api/v3/aggTrades?symbol='+encodeURIComponent(symbol);const latest=await getJson(endpoint+'&limit=1');if(!Array.isArray(latest)||!latest.length)throw Error('No trades');const lastId=Number(latest[0].a);if(!Number.isSafeInteger(lastId))throw Error('Invalid trade id');const windowSize=Number($('cvdWindow').value)||4000;const firstId=Math.max(0,lastId-windowSize+1);const batches=[];for(let from=firstId;from<=lastId;from+=1000){const count=Math.min(1000,lastId-from+1);batches.push(getJson(endpoint+'&fromId='+from+'&limit='+count))}const results=await Promise.all(batches);if(seq!==coinRequest)return;const trades=results.flat().filter(t=>Number.isFinite(Number(t.a))&&Number(t.a)<=lastId).sort((a,b)=>Number(a.a)-Number(b.a));if(!trades.length)throw Error('No historical trades');let buy=0,sell=0,delta=0;const points=[];for(const t of trades){const q=Number(t.q);if(!Number.isFinite(q)||q<0)continue;if(t.m){sell+=q;delta-=q}else{buy+=q;delta+=q}points.push(delta)}if(!points.length)throw Error('No valid quantities');$('buyVolume').textContent=fmt(buy,4)+' '+symbol.replace(/USDT$/,'');$('sellVolume').textContent=fmt(sell,4)+' '+symbol.replace(/USDT$/,'');$('dCvd').textContent=(delta>=0?'+':'')+fmt(delta,4)+' '+symbol.replace(/USDT$/,'');const first=new Date(Number(trades[0].T)).toLocaleString(),last=new Date(Number(trades[trades.length-1].T)).toLocaleString();$('flowStatus').textContent='Binance Spot · '+symbol+' · '+points.length+csText(' агрегированных сделок · ')+first+' → '+last;drawCvd(points)}catch(e){if(seq!==coinRequest)return;$('flowStatus').textContent=csText('История сделок недоступна для ')+symbol+csText('. Возможно ограничение API, региона или отсутствие пары.');drawCvd([])}}let chartInstance=null,chartResize=null,chartSeq=0,activeTf='1h',chartSymbol='';
+let selectedCoinId='';let detailRequest=0;let lastCoinId='';let lastSpotSymbol='';function drawCvd(values){const canvas=$('cvdCanvas'),w=Math.max(280,canvas.clientWidth),h=220,dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#33445e';ctx.lineWidth=1;for(let i=0;i<5;i++){const y=12+i*(h-24)/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}if(!values.length)return;let lo=Math.min(0,...values),hi=Math.max(0,...values);if(hi===lo){hi+=1;lo-=1}const y=v=>h-12-(v-lo)/(hi-lo)*(h-24);ctx.strokeStyle='#56b9ff';ctx.lineWidth=2.5;ctx.beginPath();values.forEach((v,i)=>{const x=i/(values.length-1||1)*(w-1);if(!i)ctx.moveTo(x,y(v));else ctx.lineTo(x,y(v))});ctx.stroke();ctx.fillStyle='#94a6bf';ctx.font='12px system-ui';ctx.fillText('CVD: '+fmt(values[values.length-1],4),10,19)}
+function mergeTradeWindow(history,pending,size) {
+  const trades=new Map(history.map(trade=>[trade.id,trade]));
+  for(const trade of pending) {
+    if(!trades.has(trade.id))trades.set(trade.id,trade);
+  }
+  const sorted=[...trades.values()].sort((a,b)=>a.id-b.id);
+  if(sorted.some((trade,index)=>index>0&&trade.id!==sorted[index-1].id+1))return null;
+  const last=sorted.at(-1);
+  return last&&sorted.length>=Math.min(size,last.id+1)?sorted.slice(-size):null;
+}
+
+function summarizeTradeWindow(trades) {
+  let buy=0,sell=0;
+  const points=trades.map(trade=>{
+    if(trade.sell)sell+=trade.quantity;
+    else buy+=trade.quantity;
+    return buy-sell;
+  });
+  return {buy,sell,points};
+}
+
+let tradeSession=null,spotTradeRetryAt=0;
+function readBinanceTrade(raw) {
+  const quantity=Number(raw?.q);
+  if(!Number.isSafeInteger(raw?.a)||raw.a<0||typeof raw.m!=='boolean'||
+    typeof raw.q!=='string'||!raw.q.trim()||!Number.isFinite(quantity)||quantity<0||
+    !Number.isSafeInteger(raw.T)||raw.T<=0||raw.T>8640000000000000)return null;
+  return {id:raw.a,quantity,sell:raw.m,time:raw.T};
+}
+
+function binanceSpotTrades(symbol) {
+  const endpoint='https://api.binance.com/api/v3/aggTrades?symbol='+encodeURIComponent(symbol);
+  async function request(query,signal) {
+    if(Date.now()<spotTradeRetryAt)throw Error('REST 429 cooldown');
+    const response=await fetch(endpoint+query,{signal,headers:{accept:'application/json'}});
+    if(response.status===429) {
+      spotTradeRetryAt=Math.max(spotTradeRetryAt,coinGeckoDeadline(response.headers.get('Retry-After'),Date.now()));
+    }
+    if(!response.ok)throw Error('HTTP '+response.status);
+    const rows=await response.json();
+    if(!Array.isArray(rows))throw Error('Invalid trade response');
+    const trades=rows.map(readBinanceTrade);
+    if(trades.some(trade=>!trade))throw Error('Invalid trade');
+    return trades;
+  }
+  return {
+    label:'Binance Spot · '+symbol,
+    async snapshot(size,signal) {
+      const [latest]=await request('&limit=1',signal);
+      if(!latest)throw Error('No trades');
+      const first=Math.max(0,latest.id-size+1);
+      const batches=[];
+      for(let from=first;from<=latest.id;from+=1000) {
+        batches.push(request('&fromId='+from+'&limit='+Math.min(1000,latest.id-from+1),signal));
+      }
+      const history=mergeTradeWindow([], (await Promise.all(batches)).flat(),size);
+      if(!history||history[0].id!==first||history.at(-1).id!==latest.id)throw Error('Incomplete trade history');
+      return history;
+    },
+    open() {
+      return new WebSocket('wss://stream.binance.com:9443/ws/'+symbol.toLowerCase()+'@aggTrade');
+    },
+    decode(data) {
+      const raw=JSON.parse(data);
+      return raw?.e==='aggTrade'&&raw.s===symbol?readBinanceTrade(raw):null;
+    },
+  };
+}
+
+function stopTradeFlow() {
+  const session=tradeSession;
+  tradeSession=null;
+  session?.stop();
+}
+
+function renderTradeWindow(trades,symbol) {
+  const {buy,sell,points}=summarizeTradeWindow(trades);
+  const unit=' '+symbol.replace(/USDT$/,'');
+  const delta=points.at(-1);
+  $('buyVolume').textContent=fmt(buy,4)+unit;
+  $('sellVolume').textContent=fmt(sell,4)+unit;
+  $('dCvd').textContent=(delta>=0?'+':'')+fmt(delta,4)+unit;
+  drawCvd(points);
+}
+
+function loadTrades(symbol) {
+  stopTradeFlow();
+  for(const id of ['buyVolume','sellVolume','dCvd'])$(id).textContent='—';
+  drawCvd([]);
+  if(document.hidden)return;
+  const selectedSize=Number($('cvdWindow').value);
+  const size=Number.isSafeInteger(selectedSize)&&selectedSize>0?Math.min(selectedSize,10000):4000;
+  const source=binanceSpotTrades(symbol);
+  const status=message=>{$('flowStatus').textContent=source.label+' · окно '+size+' · '+message};
+  let history=[],retry=1000;
+  const session={stop() {}};
+  tradeSession=session;
+  status('загрузка истории');
+
+  function connect() {
+    if(tradeSession!==session)return;
+    const controller=new AbortController();
+    const pending=new Map();
+    let socket,loading=true,disconnected=false,flushTimer,retryTimer,healthTimer,requestTimer;
+    session.stop=()=>{
+      clearTimeout(flushTimer);
+      clearTimeout(retryTimer);
+      clearTimeout(healthTimer);
+      clearTimeout(requestTimer);
+      controller.abort();
+      if(socket) {
+        socket.onmessage=socket.onerror=socket.onclose=null;
+        socket.close();
+      }
+    };
+    function recover(message) {
+      if(tradeSession!==session||retryTimer!==undefined)return;
+      session.stop();
+      status(message);
+      retryTimer=setTimeout(connect,Math.max(retry,spotTradeRetryAt-Date.now()));
+      retry=Math.min(retry*2,30000);
+    }
+    function disconnect() {
+      disconnected=true;
+      if(!loading)recover('данные устарели · переподключение');
+    }
+    function armHealth() {
+      clearTimeout(healthTimer);
+      healthTimer=setTimeout(disconnect,15000);
+    }
+    function update(live) {
+      const next=mergeTradeWindow(history,[...pending.values()],size);
+      if(!next) {
+        recover('пропуск сделок · данные устарели');
+        return;
+      }
+      pending.clear();
+      history=next;
+      renderTradeWindow(history,symbol);
+      const time=trade=>new Date(trade.time).toLocaleTimeString();
+      status((live?'LIVE':'история · ожидание LIVE')+' · '+history.length+' сделок · '+time(history[0])+' → '+time(history.at(-1)));
+      if(live)retry=1000;
+    }
+    if(Date.now()<spotTradeRetryAt) {
+      recover('лимит REST · ожидание повторной попытки');
+      return;
+    }
+    try {
+      socket=source.open();
+      socket.onclose=socket.onerror=disconnect;
+      socket.onmessage=event=>{
+        if(tradeSession!==session||disconnected||controller.signal.aborted)return;
+        let trade;
+        try { trade=source.decode(event.data); } catch(e) { return; }
+        if(!trade||pending.has(trade.id))return;
+        if(trade.id<=(history.at(-1)?.id??-1)&&!loading)return;
+        armHealth();
+        pending.set(trade.id,trade);
+        if(pending.size>size) {
+          recover('переполнение буфера · данные устарели');
+          return;
+        }
+        if(!loading&&flushTimer===undefined)flushTimer=setTimeout(()=>{
+          flushTimer=undefined;
+          update(true);
+        },150);
+      };
+      armHealth();
+    } catch(e) {
+      disconnected=true;
+    }
+    requestTimer=setTimeout(()=>recover('таймаут истории · данные устарели'),10000);
+    source.snapshot(size,controller.signal).then(snapshot=>{
+      if(tradeSession!==session||controller.signal.aborted)return;
+      if(snapshot.at(-1).id<(history.at(-1)?.id??-1)) {
+        recover('история отстаёт · данные устарели');
+        return;
+      }
+      loading=false;
+      history=snapshot;
+      for(const id of pending.keys())if(id<=history.at(-1).id)pending.delete(id);
+      update(!disconnected&&pending.size>0);
+      if(disconnected)disconnect();
+    }).catch(()=>{
+      if(tradeSession===session)recover('история недоступна · данные устарели');
+    }).finally(()=>clearTimeout(requestTimer));
+  }
+  connect();
+}
+let chartInstance=null,chartResize=null,chartSeq=0,activeTf='1h',chartSymbol='';
 function candlePriceFormat(rows) {
   let precision=2;
   for(const row of rows) {
@@ -292,7 +482,7 @@ async function openCoin(id, force=false) {
     stopChartStream();
     lastSpotSymbol='';
     chartSeq++;
-    coinRequest++;
+    stopTradeFlow();
     $('nativeChart').hidden=true;
     $('detailChart').hidden=true;
     $('chartStatus').textContent=csText('Биржевая пара не подтверждена: график отключён во избежание подмены актива');
@@ -303,7 +493,7 @@ async function openCoin(id, force=false) {
   if(changingCoin||lastSpotSymbol!==symbol) {
     lastSpotSymbol=symbol;
     loadCandles(symbol);
-    loadTrades(symbol,id);
+    loadTrades(symbol);
   }
   const readMetric=value=>{
     if(typeof value==='number'||(typeof value==='string'&&value.trim()))return Number(value);
@@ -666,7 +856,7 @@ async function load(force=false) {
   }
 }
 
-$('cvdWindow').addEventListener('change',()=>{if(lastSpotSymbol&&selectedCoinId)loadTrades(lastSpotSymbol,selectedCoinId)});
+$('cvdWindow').addEventListener('change',()=>{if(lastSpotSymbol&&selectedCoinId)loadTrades(lastSpotSymbol)});
 $('marketTabs').addEventListener('click',e=>{const b=e.target.closest('button[data-market-tab]');
 if(!b)return;
 marketTab=b.dataset.marketTab;
@@ -695,7 +885,7 @@ stopChartStream();
 selectedCoinId='';
 detailRequest++;
 $('coinDetail').hidden=true;
-coinRequest++}},450)});
+stopTradeFlow()}},450)});
 $('sort').addEventListener('change',render);
 $('volGrowth').addEventListener('change',render);
 $('liquidity').addEventListener('change',render);
@@ -713,7 +903,7 @@ return}const tr=e.target.closest('tr[data-id]');
 if(tr){$('search').value=coins.find(c=>c.id===tr.dataset.id)?.symbol.toUpperCase()||'';
 openCoin(tr.dataset.id);
 $('coinDetail').scrollIntoView({behavior:'smooth',block:'start'})}}));
-$('closeDetail').addEventListener('click',()=>{coinRequest++;
+$('closeDetail').addEventListener('click',()=>{stopTradeFlow();
 detailRequest++;
 selectedCoinId='';
 lastSpotSymbol='';
@@ -725,8 +915,9 @@ $('detailChart').src='about:blank'});
 translate();
 load();
 connectLive();
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseLive();stopChartStream()}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseLive();stopChartStream();stopTradeFlow();if(lastSpotSymbol)$('flowStatus').textContent+=' · приостановлено'}
 else{connectLive();
+if(lastSpotSymbol&&selectedCoinId&&!$('coinDetail').hidden)loadTrades(lastSpotSymbol);
 if(chartSymbol&&!$('coinDetail').hidden)loadCandles(chartSymbol,!!chartInstance);
 
 if(Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load()}});

@@ -42,6 +42,7 @@ const context = {
     element('nativeChart').hidden = false;
   },
   stopChartStream() {},
+  stopTradeFlow() { context.coinRequest++; },
   drawCvd: points => { drawnCvd = Array.from(points); },
   loadTrades: symbol => { context.coinRequest++; tradeCalls.push(symbol); },
   document: { querySelectorAll: () => [] },
