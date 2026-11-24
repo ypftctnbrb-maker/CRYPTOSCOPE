@@ -195,7 +195,79 @@ function candlePriceFormat(rows) {
   }
   return {type:'price',precision,minMove:10**-precision};
 }
-async function loadCandles(symbol){const seq=++chartSeq;chartSymbol=symbol;$('chartStatus').textContent=csText('Загрузка Binance Spot · ')+symbol+' · '+activeTf;$('nativeChart').hidden=false;$('detailChart').hidden=true;try{if(!window.LightweightCharts)throw Error('Chart library unavailable');const rows=await getJson('https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(symbol)+'&interval='+encodeURIComponent(activeTf)+'&limit=350');if(seq!==chartSeq)return;if(!Array.isArray(rows)||!rows.length)throw Error('Candles unavailable');const candles=rows.map(r=>({time:Math.floor(Number(r[0])/1000),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])}));const volumes=rows.map(r=>({time:Math.floor(Number(r[0])/1000),value:Number(r[5]),color:Number(r[4])>=Number(r[1])?'rgba(54,213,160,.35)':'rgba(255,101,126,.35)'}));if(candles.some(x=>![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)))throw Error('Invalid candle data');if(chartResize){chartResize.disconnect();chartResize=null}if(chartInstance){chartInstance.remove();chartInstance=null}const host=$('nativeChart');chartInstance=LightweightCharts.createChart(host,{width:host.clientWidth,height:host.clientHeight,layout:{background:{type:'solid',color:'#0b1423'},textColor:'#a3b4c9'},grid:{vertLines:{color:'#1c2b3d'},horzLines:{color:'#1c2b3d'}},rightPriceScale:{borderColor:'#33445e'},timeScale:{borderColor:'#33445e',timeVisible:true,secondsVisible:false},crosshair:{mode:LightweightCharts.CrosshairMode.Normal}});const series=chartInstance.addCandlestickSeries({priceFormat:candlePriceFormat(rows),upColor:'#36d5a0',downColor:'#ff657e',borderVisible:false,wickUpColor:'#36d5a0',wickDownColor:'#ff657e'});series.setData(candles);const volume=chartInstance.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'volume',lastValueVisible:false,priceLineVisible:false});chartInstance.priceScale('volume').applyOptions({scaleMargins:{top:.82,bottom:0}});volume.setData(volumes);chartInstance.timeScale().fitContent();chartResize=new ResizeObserver(()=>{if(chartInstance)chartInstance.applyOptions({width:host.clientWidth,height:host.clientHeight})});chartResize.observe(host);$('chartStatus').textContent='Binance Spot · '+symbol+' · '+activeTf+' · '+candles.length+csText(' свечей · ')+new Date().toLocaleTimeString()}catch(e){if(seq!==chartSeq)return;if(chartResize){chartResize.disconnect();chartResize=null}if(chartInstance){chartInstance.remove();chartInstance=null}$('nativeChart').hidden=true;$('detailChart').hidden=false;$('detailChart').src='https://s.tradingview.com/widgetembed/?frameElementId=detailChart&symbol='+encodeURIComponent('BINANCE:'+symbol)+'&interval='+({'5m':'5','15m':'15','1h':'60','4h':'240','1d':'D','1w':'W'}[activeTf]||'60')+'&hidesidetoolbar=0&symboledit=1&theme=dark&style=1&timezone=Etc%2FUTC';$('chartStatus').textContent=csText('Binance Spot: история свечей недоступна. Резервный график TradingView (проверяйте наличие пары).')}}
+let chartSocket=null,chartTimer=null,chartRetry=1000;
+
+function stopChartStream() {
+  clearTimeout(chartTimer);
+  chartTimer=null;
+  const socket=chartSocket;
+  chartSocket=null;
+  if(socket)socket.close();
+}
+
+function recoverChart(seq,symbol,label) {
+  if(seq!==chartSeq)return;
+  stopChartStream();
+  $('chartStatus').textContent=label+' · данные устарели';
+  if(document.hidden)return;
+  chartTimer=setTimeout(()=>loadCandles(symbol,true),chartRetry);
+  chartRetry=Math.min(chartRetry*2,30000);
+}
+
+function openSpotCandleStream(symbol,interval) {
+  return new WebSocket('wss://stream.binance.com:9443/ws/'+symbol.toLowerCase()+'@kline_'+interval);
+}
+
+function streamCandles(seq,symbol,interval,label,series,volume,lastTime) {
+  if(document.hidden)return;
+  let socket;
+  try {
+    socket=openSpotCandleStream(symbol,interval);
+  } catch(e) {
+    recoverChart(seq,symbol,label);
+    return;
+  }
+  chartSocket=socket;
+  let lastEvent=0;
+  const recover=()=>{
+    if(chartSocket===socket)recoverChart(seq,symbol,label);
+  };
+  const armTimeout=()=>{
+    clearTimeout(chartTimer);
+    chartTimer=setTimeout(recover,15000);
+  };
+  armTimeout();
+  socket.onerror=recover;
+  socket.onclose=recover;
+  socket.onmessage=event=>{
+    if(chartSocket!==socket||seq!==chartSeq)return;
+    let update;
+    try { update=JSON.parse(event.data); } catch(e) { return; }
+    const k=update?.k;
+    if(update?.e!=='kline'||update.s!==symbol||k?.i!==interval)return;
+
+    const time=k.t/1000, eventTime=update.E, end=k.T;
+    const open=Number(k.o),high=Number(k.h),low=Number(k.l),close=Number(k.c),value=Number(k.v);
+    if(!Number.isSafeInteger(time)||!Number.isSafeInteger(end)||end<k.t||
+      !Number.isSafeInteger(eventTime)||eventTime<=lastEvent||time<lastTime||
+      ![open,high,low,close].every(price=>Number.isFinite(price)&&price>0)||
+      typeof k.v!=='string'||!k.v.trim()||!Number.isFinite(value)||value<0)return;
+    if(time>lastTime+(end-k.t+1)/1000) {
+      recover();
+      return;
+    }
+    const priceFormat=candlePriceFormat([[k.t,k.o,k.h,k.l,k.c]]);
+    if(priceFormat.precision>series.options().priceFormat.precision)series.applyOptions({priceFormat});
+    series.update({time,open,high,low,close});
+    volume.update({time,value,color:close>=open?'rgba(54,213,160,.35)':'rgba(255,101,126,.35)'});
+    lastTime=time;
+    lastEvent=eventTime;
+    chartRetry=1000;
+    armTimeout();
+    $('chartStatus').textContent=label+' · LIVE · '+new Date().toLocaleTimeString();
+  };
+}
+async function loadCandles(symbol,recovering=false){const seq=++chartSeq;stopChartStream();chartSymbol=symbol;const interval=activeTf,label='Binance Spot · '+symbol+' · '+interval;if(!recovering){chartRetry=1000;$('chartStatus').textContent='Загрузка '+label;}$('nativeChart').hidden=false;$('detailChart').hidden=true;try{if(!window.LightweightCharts)throw Error('Chart library unavailable');const rows=await getJson('https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(symbol)+'&interval='+encodeURIComponent(interval)+'&limit=350');if(seq!==chartSeq)return;if(!Array.isArray(rows)||!rows.length)throw Error('Candles unavailable');const candles=rows.map(r=>({time:Math.floor(Number(r[0])/1000),open:Number(r[1]),high:Number(r[2]),low:Number(r[3]),close:Number(r[4])}));const volumes=rows.map(r=>({time:Math.floor(Number(r[0])/1000),value:Number(r[5]),color:Number(r[4])>=Number(r[1])?'rgba(54,213,160,.35)':'rgba(255,101,126,.35)'}));if(candles.some(x=>![x.time,x.open,x.high,x.low,x.close].every(Number.isFinite)))throw Error('Invalid candle data');if(chartResize){chartResize.disconnect();chartResize=null}if(chartInstance){chartInstance.remove();chartInstance=null}const host=$('nativeChart');chartInstance=LightweightCharts.createChart(host,{width:host.clientWidth,height:host.clientHeight,layout:{background:{type:'solid',color:'#0b1423'},textColor:'#a3b4c9'},grid:{vertLines:{color:'#1c2b3d'},horzLines:{color:'#1c2b3d'}},rightPriceScale:{borderColor:'#33445e'},timeScale:{borderColor:'#33445e',timeVisible:true,secondsVisible:false},crosshair:{mode:LightweightCharts.CrosshairMode.Normal}});const series=chartInstance.addCandlestickSeries({priceFormat:candlePriceFormat(rows),upColor:'#36d5a0',downColor:'#ff657e',borderVisible:false,wickUpColor:'#36d5a0',wickDownColor:'#ff657e'});series.setData(candles);const volume=chartInstance.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'volume',lastValueVisible:false,priceLineVisible:false});chartInstance.priceScale('volume').applyOptions({scaleMargins:{top:.82,bottom:0}});volume.setData(volumes);chartInstance.timeScale().fitContent();chartResize=new ResizeObserver(()=>{if(chartInstance)chartInstance.applyOptions({width:host.clientWidth,height:host.clientHeight})});chartResize.observe(host);const historyLabel=label+' · '+candles.length+' свечей';$('chartStatus').textContent=historyLabel+' · '+(recovering?'данные устарели · ожидание LIVE':new Date().toLocaleTimeString());streamCandles(seq,symbol,interval,historyLabel,series,volume,candles.at(-1).time)}catch(e){if(seq!==chartSeq)return;if(recovering&&chartInstance){recoverChart(seq,symbol,label);return;}if(chartResize){chartResize.disconnect();chartResize=null}if(chartInstance){chartInstance.remove();chartInstance=null}$('nativeChart').hidden=true;$('detailChart').hidden=false;$('detailChart').src='https://s.tradingview.com/widgetembed/?frameElementId=detailChart&symbol='+encodeURIComponent('BINANCE:'+symbol)+'&interval='+({'5m':'5','15m':'15','1h':'60','4h':'240','1d':'D','1w':'W'}[activeTf]||'60')+'&hidesidetoolbar=0&symboledit=1&theme=dark&style=1&timezone=Etc%2FUTC';$('chartStatus').textContent=csText('Binance Spot: история свечей недоступна. Резервный график TradingView (проверяйте наличие пары).')}}
 $('timeframes').addEventListener('click',e=>{const b=e.target.closest('button[data-tf]');if(!b)return;activeTf=b.dataset.tf;document.querySelectorAll('#timeframes button').forEach(x=>x.classList.toggle('active',x===b));if(chartSymbol)loadCandles(chartSymbol)});
 async function openCoin(id, force=false) {
   const c=coins.find(x=>x.id===id);
@@ -217,6 +289,7 @@ async function openCoin(id, force=false) {
     ['buyVolume','sellVolume','dCvd'].forEach(k=>$(k).textContent='—');
     drawCvd([]);
     chartSymbol='';
+    stopChartStream();
     lastSpotSymbol='';
     chartSeq++;
     coinRequest++;
@@ -616,6 +689,9 @@ const candidate=matches[0]||
   searchable.filter(c=>c.symbol.toLowerCase().startsWith(q)||c.name.toLowerCase().startsWith(q)).sort((a,b)=>(b.market_cap||0)-(a.market_cap||0))[0];
 if(candidate)openCoin(candidate.id);
 else{lastSpotSymbol='';
+chartSymbol='';
+chartSeq++;
+stopChartStream();
 selectedCoinId='';
 detailRequest++;
 $('coinDetail').hidden=true;
@@ -643,13 +719,15 @@ selectedCoinId='';
 lastSpotSymbol='';
 chartSeq++;
 chartSymbol='';
+stopChartStream();
 $('coinDetail').hidden=true;
 $('detailChart').src='about:blank'});
 translate();
 load();
 connectLive();
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseLive()}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseLive();stopChartStream()}
 else{connectLive();
+if(chartSymbol&&!$('coinDetail').hidden)loadCandles(chartSymbol,!!chartInstance);
 
 if(Date.now()>=marketRetryAt&&Date.now()-lastMarketAttempt>=300000)load()}});
 
