@@ -38,7 +38,7 @@ fs.mkdirSync(root, { recursive: true });
       const pages = [
         [coin('bitcoin', 'btc', 1e12, 100), coin('ethereum', 'eth', 5e11, 10)],
         [coin('alpha', 'alpha', 1e9, 1)], [coin('candidate', 'cand', 50e6, 0.1)],
-        [coin('delta', 'delta', 30e6, 0.03)],
+        [coin('pepe', 'pepe', 30e6, 0.00000301)],
       ];
       Object.assign(pages[2][0], { fully_diluted_valuation: 200e6, circulating_supply: 50e6,
         total_supply: 75e6, max_supply: 100e6 });
@@ -53,6 +53,12 @@ fs.mkdirSync(root, { recursive: true });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
         if (url.pathname.endsWith('/klines')) {
+          if (url.searchParams.get('symbol') === 'PEPEUSDT') {
+            return route.fulfill({ json: [
+              [1794596400000, '0.00000300', '0.00000302', '0.00000299', '0.00000301', '12'],
+              [1794596700000, '0.00000301', '0.00000303', '0.00000300', '0.00000302', '15'],
+            ] });
+          }
           return route.fulfill({ contentType: 'application/json', body: JSON.stringify([
             [1794596400000, '100', '105', '99', '104', '12'],
             [1794600000000, '104', '106', '103', '105', '15'],
@@ -67,6 +73,39 @@ fs.mkdirSync(root, { recursive: true });
       assert.equal(await page.evaluate(() => LightweightCharts.version()), '4.2.3');
       assert.match(await page.locator('#chartStatus').innerText(), /Binance Spot.*BTCUSDT.*2/);
       assert.match(await page.locator('#investmentDisclaimer').innerText(), /Не является инвестиционной рекомендацией/);
+      if (width === 390) {
+        await page.evaluate(() => {
+          const library = window.LightweightCharts;
+          window.LightweightCharts = { ...library, createChart(...args) {
+            const chart = library.createChart(...args);
+            const addCandlestickSeries = chart.addCandlestickSeries.bind(chart);
+            chart.addCandlestickSeries = options => {
+              const series = addCandlestickSeries(options);
+              window.testCandleSeries = series;
+              return series;
+            };
+            return chart;
+          } };
+        });
+        await page.locator('#timeframes button[data-tf="5m"]').click();
+        await page.waitForFunction(() => /BTCUSDT · 5m · 2/.test(document.querySelector('#chartStatus').textContent));
+        for (const [table, coinId, pair, prices, labels] of [
+          ['small', 'pepe', 'PEPEUSDT', [0.00000301, 0.00000302], ['0.00000301', '0.00000302']],
+          ['major', 'bitcoin', 'BTCUSDT', [104, 105], ['104.00', '105.00']],
+          ['small', 'pepe', 'PEPEUSDT', [0.00000301, 0.00000302], ['0.00000301', '0.00000302']],
+        ]) {
+          await page.locator(`#${table} tr[data-id="${coinId}"] td`).first().click();
+          await page.waitForFunction(pair => document.querySelector('#chartStatus').textContent.includes(pair + ' · 5m · 2'), pair);
+          const actual = await page.evaluate(prices => {
+            const formatter = window.testCandleSeries.priceFormatter();
+            return prices.map(price => formatter.format(price));
+          }, prices);
+          console.log(`Candlestick formatter ${pair} 5m: ${actual.join(', ')}`);
+          assert.deepEqual(actual, labels, pair + ' price labels must preserve distinct adjacent prices');
+        }
+        await page.locator('#search').fill('');
+        await page.waitForFunction(() => /BTCUSDT · 5m · 2/.test(document.querySelector('#chartStatus').textContent));
+      }
       await page.locator('#major button[data-favorite="bitcoin"]').click();
       partial = true;
       await page.clock.fastForward(60000);
