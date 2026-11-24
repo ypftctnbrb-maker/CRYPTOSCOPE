@@ -5,7 +5,8 @@ const { createHash } = require('node:crypto');
 
 const publicFiles = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html',
   'assets/app.js', 'assets/lightweight-charts-4.2.3.js', 'assets/lightweight-charts-LICENSE.txt', 'assets/styles.css', 'assets/information.css',
-  'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js'];
+  'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js',
+  'instruments.html', 'assets/venue-catalogue.json', 'assets/venue-catalogue.mjs', 'assets/bybit-market.mjs', 'assets/instruments.mjs', 'assets/instruments.css', 'assets/venue-discovery.mjs', 'assets/venue-discovery-sources.mjs'];
 
 function preparePublic(source, destination) {
   const reports = path.join(source, 'reports');

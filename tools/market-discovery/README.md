@@ -34,3 +34,15 @@ Direct WS probes require a matching trade frame. MEXC spot evidence only identif
 For the next adapter stage, use CCXT for the observed normalized REST routes. Keep venue REST discovery as the coverage reference and use public direct routes for Hyperliquid trades and MEXC OI. Normalize and validate MEXC spot protobuf before evaluating that feed for CVD.
 
 Official API references [Bybit](https://bybit-exchange.github.io/docs/v5/market/instrument), [Hyperliquid](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint), [OKX](https://www.okx.com/docs-v5/en/#public-data-rest-api-get-instruments), [Bitfinex](https://docs.bitfinex.com/reference/rest-public-conf), [MEXC](https://mexcdevelop.github.io/apidocs/spot_v3_en/).
+
+## Browser integration
+
+The homepage links to `instruments.html`. It searches all known instrument IDs in the packaged official REST snapshot, with separate venue and market filters and paginated results. Refresh keeps previous records for failed scopes and replaces the entire scope after a complete response. Unknown activity and stale records remain distinguishable. The snapshot is served from Pages and the last browser refresh is stored locally when storage is available. Regenerate the snapshot from an actual discovery run:
+
+```sh
+node export-browser-catalogue.mjs report.json ../../assets/venue-catalogue.json
+```
+
+The Bybit detail view requests 5m candles, recent trades, OI and funding by native market ID. Candle WS updates replace the live bar and reconnect through a REST snapshot. The CVD value is a signed sum of deduplicated REST trades in the returned snapshot. Spot and linear trade size use base units. Inverse sizes use quote units. A continuous trade CVD requires a separate validation of replay and gap detection. The existing Binance page remains available independently. Other venues have catalogue coverage only. MEXC spot protobuf has yet to be decoded.
+
+If a deployed Pages origin cannot read a venue's REST due to CORS, the shipped snapshot remains available. A possible free transport is a Cloudflare Worker on `workers.dev` with a fixed route allowlist per exchange, public reads only, bounded timeouts and short response caching, and CORS limited to the Pages origin. It needs an independent quota, accessibility and deployment decision.
