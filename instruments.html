@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.bybit.com https://api.hyperliquid.xyz https://www.okx.com https://api-pub.bitfinex.com https://api.mexc.com https://contract.mexc.com wss://stream.bybit.com; base-uri 'none'; object-src 'none'; form-action 'none'">
+<title>Инструменты бирж | CRYPTOSCOPE</title>
+<link rel="stylesheet" href="./assets/styles.css?v=4426d06ab4e9">
+<link rel="stylesheet" href="./assets/instruments.css?v=c7bb860b335f">
+<script defer src="./assets/lightweight-charts-4.2.3.js?v=c7dda807d662"></script>
+<script type="module" src="./assets/instruments.mjs?v=1170f9792fe4"></script>
+<link rel="stylesheet" href="./assets/referrals.css?v=837b64a25b3e">
+<script defer src="./assets/config.js?v=7240b0e4d6f3"></script>
+<script defer src="./assets/referrals.js?v=eeb7fe2c65c9"></script>
+</head>
+<body>
+<header><nav><a class="brand" href="./index.html">CRYPTOSCOPE</a><div class="referral-slot" data-bingx-placement="header" data-bingx-label="Торговать на BingX"></div></nav></header>
+<main class="instrument-page">
+<h1>Инструменты бирж</h1>
+<div class="instrument-controls">
+<label>Поиск <input id="instrument-search" type="search" placeholder="Тикер или ID"></label>
+<label>Биржа <select id="instrument-venue"><option value="">Все биржи</option></select></label>
+<label>Рынок <select id="instrument-type"><option value="">Все рынки</option><option value="spot">Spot</option><option value="perp">Perp</option></select></label>
+<button id="instrument-refresh" type="button">Обновить каталоги</button>
+</div>
+<p id="instrument-status" role="status"></p>
+<details><summary>Покрытие каталогов</summary><ul id="instrument-coverage"></ul></details>
+<section id="instrument-detail" hidden>
+<h2 id="instrument-title"></h2>
+<p id="instrument-chart-status" role="status"></p>
+<div id="instrument-chart" aria-label="Свечи и объём за 5 минут"></div>
+<ul id="instrument-metrics"></ul>
+</section>
+<p id="instrument-count" role="status"></p>
+<ul id="instrument-results" class="instrument-results"></ul>
+<div><button id="instrument-prev" type="button">Назад</button> <button id="instrument-next" type="button">Далее</button></div>
+<footer><div class="referral-slot" data-bingx-placement="footer" data-bingx-label="Торговать на BingX"></div></footer>
+</main>
+<div id="bingxMobile" class="referral-mobile" hidden>
+<button id="bingxMobileClose" type="button" aria-label="Закрыть кнопку BingX">×</button>
+<div data-bingx-placement="mobile" data-bingx-label="BingX ↗"></div>
+</div>
+</body>
+</html>
