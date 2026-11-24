@@ -70,6 +70,13 @@ fs.mkdirSync(root, { recursive: true });
           if (partial && n === 1) return route.fulfill({ status: 500, body: '{}' });
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pages[n - 1]) });
         }
+        if (url.pathname.endsWith('/aggTrades')) {
+          const trades = [
+            { a: 0, q: '2', m: false, T: 1794596400000 },
+            { a: 1, q: '1', m: true, T: 1794596401000 },
+          ];
+          return route.fulfill({ json: url.searchParams.has('fromId') ? trades : trades.slice(-1) });
+        }
         if (url.pathname.endsWith('/klines')) {
           candleRequests.push(url.searchParams.get('symbol') + ':' + url.searchParams.get('interval'));
           if (url.searchParams.get('symbol') === 'PEPEUSDT') {
@@ -94,6 +101,20 @@ fs.mkdirSync(root, { recursive: true });
       assert.match(await page.locator('#chartStatus').innerText(), /Binance Spot.*BTCUSDT.*2/);
       assert.match(await page.locator('#investmentDisclaimer').innerText(), /Не является инвестиционной рекомендацией/);
       if (width === 390) {
+        await page.waitForFunction(() => document.querySelector('#dCvd').textContent === '+1 BTC');
+        await expectPoll(() => streams.has('btcusdt@aggTrade'), 'missing BTC aggTrade WebSocket');
+        const flow = streams.get('btcusdt@aggTrade')[0];
+        const sendTrade = (a, q, m) => flow.send(JSON.stringify({
+          e: 'aggTrade', s: 'BTCUSDT', a, q, m, T: 1794596400000 + a * 1000,
+        }));
+        sendTrade(3, '2', true);
+        sendTrade(2, '4', false);
+        sendTrade(2, '4', false);
+        await page.waitForFunction(() => document.querySelector('#dCvd').textContent === '+3 BTC');
+        assert.equal(await page.locator('#buyVolume').innerText(), '6 BTC');
+        assert.equal(await page.locator('#sellVolume').innerText(), '3 BTC');
+        console.log('PASS: spot CVD 6 buy - 3 sell = +3 BTC after reordered and duplicate trades');
+
         await page.evaluate(() => {
           const library = window.LightweightCharts;
           window.LightweightCharts = { ...library, createChart(...args) {
