@@ -36,10 +36,13 @@ fs.mkdirSync(root, { recursive: true });
     for (const width of [360, 390, 768, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const streams = new Map();
+      const disconnected = new WeakSet();
       const candleRequests = [];
+      const recoveredRows = [];
       await page.routeWebSocket(/stream\.binance\.com/, socket => {
         const stream = new URL(socket.url()).pathname.split('/').pop();
         const connections = streams.get(stream) || [];
+        socket.onClose(() => disconnected.add(socket));
         connections.push(socket);
         streams.set(stream, connections);
       });
@@ -73,6 +76,7 @@ fs.mkdirSync(root, { recursive: true });
             return route.fulfill({ json: [
               [1794596400000, '0.00000300', '0.00000302', '0.00000299', '0.00000301', '12'],
               [1794596700000, '0.00000301', '0.00000303', '0.00000300', '0.00000302', '15'],
+              ...recoveredRows,
             ] });
           }
           return route.fulfill({ contentType: 'application/json', body: JSON.stringify([
@@ -156,24 +160,31 @@ fs.mkdirSync(root, { recursive: true });
           window.testCandleSeries.data().at(-2).close, window.testVolumeSeries.data().at(-2).value,
         ]), [0.00000303, 21], 'duplicate must not overwrite the latest snapshot');
         const requestsBeforeGap = candleRequests.length;
+        recoveredRows.push(...[1, 2, 3].map(step => [
+          last + step * 300000, '0.00000301', '0.00000312', '0.00000300', '0.00000305', '25',
+        ]));
         send(socket, last + 900000, last + 901000, '0.00000312', '75');
         await expectPoll(() => candleRequests.length > requestsBeforeGap, 'gap must trigger REST backfill');
         const restored = await waitForStream(stream, 3);
-        send(restored, last, last + 2000, '0.00000306', '26');
-        await expectLatest([0.00000306, 26, 2]);
+        send(restored, last + 900000, last + 902000, '0.00000306', '26');
+        await expectLatest([0.00000306, 26, 5]);
         await page.clock.fastForward(16000);
         await page.waitForFunction(() => document.querySelector('#chartStatus').textContent.includes('устарели'));
         const reconnected = await waitForStream(stream, 4);
-        send(reconnected, last, last + 3000, '0.00000307', '27');
-        await expectLatest([0.00000307, 27, 2]);
+        send(reconnected, last + 900000, last + 903000, '0.00000307', '27');
+        await expectLatest([0.00000307, 27, 5]);
         assert.match(await page.locator('#chartStatus').innerText(), /LIVE/);
         await page.locator('#timeframes button[data-tf="15m"]').click();
-        await waitForStream('pepeusdt@kline_15m', 1);
+        const fifteenMinute = await waitForStream('pepeusdt@kline_15m', 1);
+        await expectPoll(() => disconnected.has(reconnected), 'old timeframe must close its socket');
         await page.locator('#timeframes button[data-tf="5m"]').click();
-        await waitForStream(stream, 5);
+        const finalPepe = await waitForStream(stream, 5);
+        await expectPoll(() => disconnected.has(fifteenMinute), '15m socket must close when switching back');
         console.log('PASS: candle updates, rollover, duplicate, gap backfill, stale recovery, timeframe switch');
         await page.locator('#search').fill('');
         await page.waitForFunction(() => /BTCUSDT · 5m · 2/.test(document.querySelector('#chartStatus').textContent));
+        await waitForStream('btcusdt@kline_5m', 3);
+        await expectPoll(() => disconnected.has(finalPepe), 'old pair must close its socket');
       }
       await page.locator('#major button[data-favorite="bitcoin"]').click();
       partial = true;
