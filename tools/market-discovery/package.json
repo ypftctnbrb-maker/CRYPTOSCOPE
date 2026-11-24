@@ -1,0 +1,8 @@
+{
+  "name": "cryptoscope-market-discovery",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test discovery.test.mjs", "discover": "node --use-env-proxy run.mjs" },
+  "dependencies": { "ccxt": "4.5.94" }
+}
