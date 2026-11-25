@@ -1,12 +1,16 @@
 import { venueNames, reconcileScopes, searchCatalogue, refreshCatalogue } from './venue-catalogue.mjs';
 import { bybitAdapter } from './bybit-market.mjs';
 import { okxAdapter, resolveOkxContract } from './okx-market.mjs';
+import { hyperliquidAdapter } from './hyperliquid-market.mjs';
+import { bitfinexAdapter } from './bitfinex-market.mjs';
+import { mexcAdapter } from './mexc-market.mjs';
 import { trackTradeSegments, tradeHistory } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
 const storageKey = 'cryptoscope-venue-catalogue-v1';
 const pageSize = 50;
-const adapters = { bybit: bybitAdapter, okx: okxAdapter };
+const adapters = { bybit: bybitAdapter, okx: okxAdapter, hyperliquid: hyperliquidAdapter,
+  bitfinex: bitfinexAdapter, mexc: mexcAdapter };
 let catalogue = {}, offset = 0, selection;
 const text = (tag, content) => Object.assign(document.createElement(tag), { textContent: content });
 const timestamp = value => value && Number.isFinite(new Date(value).valueOf())
@@ -104,6 +108,7 @@ async function open(market) {
         ' · сегмент с ' + timestamp(bucket.segment) + ' · сделки ' +
         timestamp(bucket.first) + ' — ' + timestamp(bucket.last)));
       historyRows.replaceChildren(text('li', adapter.source + ' · ' + timestamp(snapshot.timestamp)),
+        ...(snapshot.coverageNote ? [text('li', snapshot.coverageNote)] : []),
         ...(rows.length ? rows : [text('li', 'Подтверждённых сделок нет')]));
     }).catch(() => {
       if (active() && currentTrades === request) historyRows.replaceChildren(text('li', adapter.source + ' · история недоступна'));
@@ -178,7 +183,10 @@ async function open(market) {
       if (!chart) {
         host.hidden = false;
         chart = window.LightweightCharts.createChart(host, { width: host.clientWidth, height: 300 });
-        prices = chart.addCandlestickSeries(step > 0 ? { priceFormat: { type: 'price', minMove: step } } : {});
+        const priceFormat = step > 0 ? { type: 'price', minMove: step } : {
+          type: 'custom', formatter: value => value.toLocaleString('ru-RU', { maximumSignificantDigits: 10 }),
+        };
+        prices = chart.addCandlestickSeries({ priceFormat });
         volumes = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' } });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
         resize = new ResizeObserver(() => chart.applyOptions({ width: host.clientWidth }));
