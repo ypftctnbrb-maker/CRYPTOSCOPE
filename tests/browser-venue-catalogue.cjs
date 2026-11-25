@@ -53,7 +53,11 @@ async function main() {
         socket.onClose(() => { closed = true; });
         socket.onMessage(message => {
           const topic = JSON.parse(message).args?.[0];
-          if (topic) {
+          if (topic?.startsWith('publicTrade.')) {
+            socket.send(JSON.stringify({ topic, data: [{ s: topic.slice('publicTrade.'.length), i: 'live-a',
+              v: '3', p: '0.00000302', T: Date.now(), S: 'Sell' }] }));
+          }
+          if (topic?.startsWith('kline.')) {
             stream = socket;
             socket.send(JSON.stringify({ topic, data: [{ start: 1795555200000, open: '0.00000301',
               high: '0.00000305', low: '0.000003', close: '0.00000304', volume: '41', timestamp: 1795555201000 }] }));
@@ -89,6 +93,8 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('LIVE'));
     assert.ok(stream);
     await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('OI · 0'));
+    await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
+    assert.match(await page.locator('#instrument-metrics').innerText(), /Δ 5m .* -3 1000PEPE/);
     assert.match(await page.locator('#instrument-metrics').innerText(), /CVD снимка сделок · 2 1000PEPE/);
     assert.match(await page.locator('#instrument-metrics').innerText(), /Funding · 0.01 %/);
     const firstStream = stream;
@@ -105,6 +111,7 @@ async function main() {
     assert.match(await page.locator('#instrument-chart-status').innerText(), /Метрики.*недоступны/);
     for (let index = 0; index < 50 && !closed; index++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(closed, true);
+    assert.equal(await page.locator('#instrument-metrics li').count(), 0);
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     console.log('PASS: all venue scopes, Hyperliquid native ID, Bybit fixture metrics, live candle and socket cleanup');
