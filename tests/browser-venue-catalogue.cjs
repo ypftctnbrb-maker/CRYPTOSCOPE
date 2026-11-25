@@ -38,6 +38,7 @@ async function main() {
     });
     page.on('requestfailed', request => failures.push([request.failure()?.errorText, request.url()]));
     let stream, closed = false, historyRequests = 0, okxClosed = 0, okxTradeHistory = 0, okxTradeStream;
+    const closedExtra = { hyperliquid: 0, bitfinex: 0, mexc: 0 };
     if (!live) {
       await page.route('https://api.bybit.com/**', route => {
         const url = new URL(route.request().url());
@@ -90,6 +91,63 @@ async function main() {
           socket.send(JSON.stringify({ arg, data: arg.channel === 'candle5m' ? [candle] : [trade, trade] }));
         });
       });
+      const currentBucket = () => Math.floor(Date.now() / 300000) * 300000;
+      await page.route('https://api.hyperliquid.xyz/info', route => {
+        const query = route.request().postDataJSON();
+        const coin = query.coin ?? query.req.coin;
+        const time = currentBucket();
+        const candle = { s: coin, i: '5m', t: time, o: '2', h: '3', l: '1', c: '2', v: '6' };
+        const trade = { coin, tid: 1, time, px: '2', sz: '6', side: 'B' };
+        return route.fulfill({ json: query.type === 'candleSnapshot' ? [candle] : [trade] });
+      });
+      await page.routeWebSocket('wss://api.hyperliquid.xyz/**', socket => {
+        socket.onClose(() => { closedExtra.hyperliquid++; });
+        socket.onMessage(data => {
+          const subscription = JSON.parse(data).subscription;
+          if (!subscription) return;
+          const { coin, type } = subscription;
+          const value = type === 'candle'
+            ? { s: coin, i: '5m', t: currentBucket(), o: '2', h: '3', l: '1', c: '2', v: '6' }
+            : [{ coin, tid: 2, time: Date.now(), px: '2', sz: '4', side: 'A' }];
+          socket.send(JSON.stringify({ channel: type, data: value }));
+        });
+      });
+      await page.route('https://api-pub.bitfinex.com/v2/**', route => {
+        const time = currentBucket();
+        return route.fulfill({ json: route.request().url().includes('/candles/')
+          ? [[time, 6, 7, 8, 5, 12]] : [[1, time, -4, 7]] });
+      });
+      await page.routeWebSocket('wss://api-pub.bitfinex.com/**', socket => {
+        socket.onClose(() => { closedExtra.bitfinex++; });
+        socket.onMessage(data => {
+          const { channel, symbol, key } = JSON.parse(data);
+          socket.send(JSON.stringify({ event: 'subscribed', channel, symbol, key, chanId: 9 }));
+          socket.send(JSON.stringify(channel === 'candles'
+            ? [9, [currentBucket(), 6, 7, 8, 5, 12]] : [9, 'te', [2, Date.now(), 3, 7]]));
+        });
+      });
+      await page.route('https://contract.mexc.com/api/v1/**', route => {
+        const url = route.request().url();
+        const time = currentBucket();
+        const data = url.includes('/kline/')
+          ? { time: [time / 1000], open: [7], high: [8], low: [6], close: [7], vol: [10] }
+          : url.includes('/deals/') ? [{ i: '1', t: time, p: 7, v: 9, T: 2 }]
+            : { symbol: 'BTC_USDT', holdVol: 10, fundingRate: 0.0001, timestamp: time };
+        return route.fulfill({ json: { success: true, code: 0, data } });
+      });
+      await page.routeWebSocket('wss://contract.mexc.com/**', socket => {
+        socket.onClose(() => { closedExtra.mexc++; });
+        socket.onMessage(raw => {
+          const { method, param } = JSON.parse(raw);
+          if (!param) return;
+          const { symbol, interval } = param;
+          const ts = Date.now();
+          const data = method === 'sub.kline'
+            ? { symbol, interval, t: currentBucket() / 1000, o: 7, h: 8, l: 6, c: 7, q: 10 }
+            : [{ i: '2', t: ts, p: 7, v: 8, T: 1 }];
+          socket.send(JSON.stringify({ channel: method.replace('sub.', 'push.'), symbol, data, ts }));
+        });
+      });
     }
     await page.goto('http://127.0.0.1:' + server.address().port + '/instruments.html');
     await page.waitForFunction(() => document.querySelector('#instrument-next').disabled === false &&
@@ -117,6 +175,19 @@ async function main() {
         await page.getByRole('button', { name: 'OKX · ' + type + ' · ' + id, exact: true }).click();
         await page.waitForTimeout(4500);
         console.log(JSON.stringify({ id, type, status: await page.locator('#instrument-chart-status').innerText(),
+          metrics: await page.locator('#instrument-metrics').innerText() }));
+      }
+      for (const [venue, label, id] of [
+        ['hyperliquid', 'Hyperliquid · spot · @142', '@142'],
+        ['bitfinex', 'Bitfinex · spot · BTCUSD', 'BTCUSD'],
+        ['mexc', 'MEXC · spot · BTCUSDT', 'BTCUSDT'],
+        ['mexc', 'MEXC · perp · BTC_USDT', 'BTC_USDT'],
+      ]) {
+        await page.locator('#instrument-venue').selectOption(venue);
+        await search.fill(id);
+        await page.getByRole('button', { name: label, exact: true }).click();
+        await page.waitForTimeout(3500);
+        console.log(JSON.stringify({ venue, id, status: await page.locator('#instrument-chart-status').innerText(),
           metrics: await page.locator('#instrument-metrics').innerText() }));
       }
       await page.locator('#instrument-refresh').click();
@@ -162,18 +233,32 @@ async function main() {
       document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
     assert.match(await page.locator('#instrument-metrics').innerText(), /сегмент с .* -20 BTC/);
     assert.doesNotMatch(await page.locator('#instrument-metrics').innerText(), /OI · 7 BTC/);
-    await page.locator('#instrument-venue').selectOption('hyperliquid');
-    await search.fill('@129');
-    await page.getByRole('button', { name: /Hyperliquid.*@129$/ }).click();
-    assert.match(await page.locator('#instrument-chart-status').innerText(), /Метрики.*недоступны/);
-    for (let index = 0; index < 50 && (!closed || okxClosed < 4); index++) await new Promise(resolve => setTimeout(resolve, 20));
+    for (const [venue, label, id, value, historyValue] of [
+      ['hyperliquid', 'Hyperliquid · spot · @129', '@129', '-4 MON', '6 MON'],
+      ['bitfinex', 'Bitfinex · spot · BTCUSD', 'BTCUSD', '3 BTC', '-4 BTC'],
+      ['mexc', 'MEXC · perp · BTC_USDT', 'BTC_USDT', '8 контрактов', '-9 контрактов'],
+    ]) {
+      await page.locator('#instrument-venue').selectOption(venue);
+      await search.fill(id);
+      await page.getByRole('button', { name: label, exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('LIVE') &&
+        document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
+      await page.waitForFunction(amount => document.querySelector('#instrument-history-rows').textContent.includes('CVD ' + amount), historyValue);
+      assert.match(await page.locator('#instrument-metrics').innerText(), new RegExp('сегмент с .* ' + value));
+      assert.doesNotMatch(await page.locator('#instrument-history-rows').textContent(), /Bybit|OKX/);
+    }
+    await page.locator('#instrument-venue').selectOption('bybit');
+    await search.fill('PEPEUSDT');
+    await instrument.click();
+    await page.waitForFunction(() => document.querySelector('#instrument-history-rows').textContent.includes('Bybit'));
+    for (let index = 0; index < 50 && (!closed || okxClosed < 4 ||
+      Object.values(closedExtra).some(count => count < 2)); index++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(closed, true);
     assert.ok(okxClosed >= 4);
-    assert.equal(await page.locator('#instrument-history').isVisible(), false);
-    assert.equal(await page.locator('#instrument-metrics li').count(), 0);
+    assert.deepEqual(closedExtra, { hyperliquid: 2, bitfinex: 2, mexc: 2 });
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    console.log('PASS: all venue scopes, Hyperliquid native ID, Bybit and OKX candles, partial historical CVD, live CVD, instrument switching and socket cleanup');
+    console.log('PASS: all venue scopes, Hyperliquid native ID, five venue candles, partial historical CVD, live CVD, instrument switching and socket cleanup');
   } finally {
     await browser?.close();
     server.close();
