@@ -37,7 +37,7 @@ async function main() {
       if (response.url().startsWith('https:')) responses.push([response.status(), response.url()]);
     });
     page.on('requestfailed', request => failures.push([request.failure()?.errorText, request.url()]));
-    let stream, closed = false, historyRequests = 0;
+    let stream, closed = false, historyRequests = 0, okxClosed = 0, okxTradeHistory = 0, okxTradeStream;
     if (!live) {
       await page.route('https://api.bybit.com/**', route => {
         const url = new URL(route.request().url());
@@ -64,6 +64,32 @@ async function main() {
           }
         });
       });
+      await page.route('https://www.okx.com/**', route => {
+        const url = new URL(route.request().url());
+        const instId = url.searchParams.get('instId');
+        if (url.pathname.endsWith('/history-trades') && instId === 'BTC-USDT-SWAP') okxTradeHistory++;
+        const timestamp = Math.floor(Date.now() / 300000) * 300000;
+        const rows = {
+          instruments: [{ instId, ctVal: '0.01', ctValCcy: 'BTC', tickSz: '0.1' }],
+          candles: [[String(timestamp), '61000', '61100', '60900', '61001', '20']],
+          'history-trades': [{ instId, tradeId: 'rest', ts: String(timestamp), px: '61000', sz: '30', side: 'buy' }],
+          'open-interest': [{ oiCcy: '7', ts: String(timestamp) }],
+          'funding-rate-history': [{ realizedRate: '0.0002', fundingTime: String(timestamp) }],
+        };
+        return route.fulfill({ json: { code: '0', data: rows[url.pathname.split('/').at(-1)] } });
+      });
+      await page.routeWebSocket('wss://ws.okx.com:8443/**', socket => {
+        socket.onClose(() => { okxClosed++; });
+        socket.onMessage(message => {
+          if (message === 'ping') return;
+          const [arg] = JSON.parse(message).args;
+          const now = Date.now();
+          if (arg.channel === 'trades-all') okxTradeStream = socket;
+          const candle = [String(Math.floor(now / 300000) * 300000), '61000', '61100', '60900', '61002', '21'];
+          const trade = { instId: arg.instId, tradeId: 'live', ts: String(now), px: '61001', sz: '20', side: 'sell' };
+          socket.send(JSON.stringify({ arg, data: arg.channel === 'candle5m' ? [candle] : [trade, trade] }));
+        });
+      });
     }
     await page.goto('http://127.0.0.1:' + server.address().port + '/instruments.html');
     await page.waitForFunction(() => document.querySelector('#instrument-next').disabled === false &&
@@ -82,6 +108,14 @@ async function main() {
         await search.fill(id);
         await page.getByRole('button', { name: 'Bybit · ' + type + ' · ' + id, exact: true }).click();
         await page.waitForTimeout(6500);
+        console.log(JSON.stringify({ id, type, status: await page.locator('#instrument-chart-status').innerText(),
+          metrics: await page.locator('#instrument-metrics').innerText() }));
+      }
+      await page.locator('#instrument-venue').selectOption('okx');
+      for (const [id, type] of [['BTC-USDT', 'spot'], ['BTC-USDT-SWAP', 'perp']]) {
+        await search.fill(id);
+        await page.getByRole('button', { name: 'OKX · ' + type + ' · ' + id, exact: true }).click();
+        await page.waitForTimeout(4500);
         console.log(JSON.stringify({ id, type, status: await page.locator('#instrument-chart-status').innerText(),
           metrics: await page.locator('#instrument-metrics').innerText() }));
       }
@@ -104,17 +138,42 @@ async function main() {
     assert.notEqual(stream, firstStream);
     assert.equal(historyRequests, 2);
     await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('LIVE'));
+    assert.match(await page.locator('#instrument-history-rows').textContent(), /CVD 2 1000PEPE/);
     closed = false;
+    await page.locator('#instrument-venue').selectOption('okx');
+    await search.fill('BTC-USDT-SWAP');
+    await page.getByRole('button', { name: 'OKX · perp · BTC-USDT-SWAP', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('OKX swap · BTC-USDT-SWAP · 5m · LIVE') &&
+      document.querySelector('#instrument-history-rows').textContent.includes('CVD 0.3 BTC') &&
+      document.querySelector('#instrument-metrics').textContent.includes('OI · 7 BTC'));
+    assert.match(await page.locator('#instrument-metrics').innerText(), /сегмент с .* -0.2 BTC/);
+    assert.match(await page.locator('#instrument-metrics').innerText(), /Funding · 0.02 %/);
+    assert.doesNotMatch(await page.locator('#instrument-history-rows').textContent(), /Bybit|1000PEPE/);
+    const previousOkxStream = okxTradeStream;
+    previousOkxStream.close();
+    await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('CVD · данные устарели'));
+    await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE') &&
+      document.querySelector('#instrument-history-rows').textContent.includes('CVD 0.3 BTC'));
+    assert.notEqual(okxTradeStream, previousOkxStream);
+    assert.equal(okxTradeHistory, 2);
+    await search.fill('BTC-USDT');
+    await page.getByRole('button', { name: 'OKX · spot · BTC-USDT', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#instrument-history-rows').textContent.includes('CVD 30 BTC') &&
+      document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
+    assert.match(await page.locator('#instrument-metrics').innerText(), /сегмент с .* -20 BTC/);
+    assert.doesNotMatch(await page.locator('#instrument-metrics').innerText(), /OI · 7 BTC/);
     await page.locator('#instrument-venue').selectOption('hyperliquid');
     await search.fill('@129');
     await page.getByRole('button', { name: /Hyperliquid.*@129$/ }).click();
     assert.match(await page.locator('#instrument-chart-status').innerText(), /Метрики.*недоступны/);
-    for (let index = 0; index < 50 && !closed; index++) await new Promise(resolve => setTimeout(resolve, 20));
+    for (let index = 0; index < 50 && (!closed || okxClosed < 4); index++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(closed, true);
+    assert.ok(okxClosed >= 4);
+    assert.equal(await page.locator('#instrument-history').isVisible(), false);
     assert.equal(await page.locator('#instrument-metrics li').count(), 0);
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    console.log('PASS: all venue scopes, Hyperliquid native ID, Bybit fixture metrics, live candle and socket cleanup');
+    console.log('PASS: all venue scopes, Hyperliquid native ID, Bybit and OKX candles, partial historical CVD, live CVD, instrument switching and socket cleanup');
   } finally {
     await browser?.close();
     server.close();

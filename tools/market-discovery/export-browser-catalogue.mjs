@@ -9,8 +9,8 @@ const catalogue = Object.fromEntries(report.results.filter(result => result.dire
     scope, status, count, error,
     retrievedAt: result.http?.filter(entry => entry.http === 200).map(entry => entry.retrievedAt).sort().at(-1)
       ?? report.completedAt,
-    markets: markets.map(({ venue, type, id, base, quote, settle, active, precision, inverse, linear, contractSize, assetIds }) =>
-      ({ venue, type, id, base, quote, settle, active, precision, inverse, linear, contractSize, assetIds })),
+    markets: markets.map(({ venue, type, id, base, quote, settle, active, precision, inverse, linear, contractSize, contractSizeUnit, assetIds }) =>
+      ({ venue, type, id, base, quote, settle, active, precision, inverse, linear, contractSize, contractSizeUnit, assetIds })),
     unknownMarkets: unknownMarkets ?? [],
   })),
 ]));

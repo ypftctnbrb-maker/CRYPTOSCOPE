@@ -1,10 +1,12 @@
 import { venueNames, reconcileScopes, searchCatalogue, refreshCatalogue } from './venue-catalogue.mjs';
 import { bybitAdapter } from './bybit-market.mjs';
-import { trackTradeSegments } from './instrument-trades.mjs';
+import { okxAdapter, resolveOkxContract } from './okx-market.mjs';
+import { trackTradeSegments, tradeHistory } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
 const storageKey = 'cryptoscope-venue-catalogue-v1';
 const pageSize = 50;
+const adapters = { bybit: bybitAdapter, okx: okxAdapter };
 let catalogue = {}, offset = 0, selection;
 const text = (tag, content) => Object.assign(document.createElement(tag), { textContent: content });
 const timestamp = value => value && Number.isFinite(new Date(value).valueOf())
@@ -55,36 +57,76 @@ function stopSelection() {
   selection = null;
 }
 
-function open(market) {
+async function open(market) {
   stopSelection();
   element('detail').hidden = false;
   element('title').textContent = [venueNames[market.venue], market.type, market.id].join(' · ');
   element('metrics').replaceChildren();
+  const history = element('history');
+  history.hidden = true;
+  element('history-rows').replaceChildren();
   element('chart').hidden = true;
-  if (market.venue !== 'bybit' || market.active !== true) {
+  if (!Object.hasOwn(adapters, market.venue) || market.active !== true) {
     element('chart-status').textContent = 'Метрики этого инструмента недоступны · каталог от ' + timestamp(market.observedAt);
     return;
   }
-  const adapter = bybitAdapter(market);
   const controller = new AbortController();
   const active = () => !controller.signal.aborted;
+  selection = { market, stop: () => controller.abort() };
+  let instrument = market;
+  if (market.venue === 'okx' && market.type === 'perp' && !market.contractSizeUnit) {
+    element('chart-status').textContent = 'OKX · загрузка спецификации контракта';
+    try {
+      instrument = await resolveOkxContract(market, controller.signal);
+    } catch {
+      if (active()) element('chart-status').textContent = 'OKX · спецификация контракта недоступна';
+      return;
+    }
+    if (!active()) return;
+  }
+  const adapter = adapters[market.venue](instrument);
   let chart, resize, closeSocket, timer, delay = 1000;
   const status = message => { element('chart-status').textContent = adapter.source + ' · 5m · ' + message; };
+  const amount = (value, unit) => show(Number(value.toPrecision(12)), unit);
   const tradeRow = text('li', '');
   element('metrics').append(tradeRow);
+  const historyRows = element('history-rows');
+  history.hidden = false;
+  let currentTrades;
+  function loadHistory() {
+    const request = adapter.getTrades(controller.signal);
+    currentTrades = request;
+    historyRows.replaceChildren(text('li', 'Загрузка ' + adapter.source));
+    request.then(snapshot => {
+      if (!active() || currentTrades !== request) return;
+      const rows = tradeHistory(snapshot.trades).map(bucket => text('li', timestamp(bucket.time) +
+        ' · Δ ' + amount(bucket.delta, snapshot.unit) + ' · CVD ' + amount(bucket.cumulative, snapshot.unit) +
+        ' · сегмент с ' + timestamp(bucket.segment) + ' · сделки ' +
+        timestamp(bucket.first) + ' — ' + timestamp(bucket.last)));
+      historyRows.replaceChildren(text('li', adapter.source + ' · ' + timestamp(snapshot.timestamp)),
+        ...(rows.length ? rows : [text('li', 'Подтверждённых сделок нет')]));
+    }).catch(() => {
+      if (active() && currentTrades === request) historyRows.replaceChildren(text('li', adapter.source + ' · история недоступна'));
+    });
+    return request;
+  }
+
+  const tradesRequest = loadHistory();
+  let reconnecting = false;
   const stopTrades = trackTradeSegments(adapter, ({ state, segment }) => {
     const label = 'CVD · ';
     if (state === 'waiting') {
+      if (reconnecting) loadHistory();
       tradeRow.textContent = label + 'ожидание сделок · история до сегмента недоступна';
       return;
     }
     if (state === 'stale') {
+      reconnecting = true;
       tradeRow.textContent = label + 'данные устарели · переподключение';
       return;
     }
-    const amount = value => show(Number(value.toPrecision(12)), adapter.volumeUnit);
-    tradeRow.textContent = label + 'LIVE · Δ 5m (' + timestamp(segment.candle) + ') ' + amount(segment.delta) +
-      ' · сегмент с ' + timestamp(segment.start) + ' · ' + amount(segment.cumulative) + ' · сделка ' + timestamp(segment.latest);
+    tradeRow.textContent = label + 'LIVE · Δ 5m (' + timestamp(segment.candle) + ') ' + amount(segment.delta, adapter.volumeUnit) +
+      ' · сегмент с ' + timestamp(segment.start) + ' · ' + amount(segment.cumulative, adapter.volumeUnit) + ' · сделка ' + timestamp(segment.latest);
   });
   selection = { market, stop() {
     stopTrades();
@@ -104,7 +146,7 @@ function open(market) {
     ['OI', adapter.getOI, snapshot => show(snapshot.value, snapshot.unit)],
     ['Funding', adapter.getFunding, snapshot => snapshot.value === null ? '—' : show(snapshot.value * 100, '%')],
   ];
-  const requests = new Map();
+  const requests = new Map([[adapter.getTrades, tradesRequest]]);
   for (const [name, load, format] of metrics) {
     const row = text('li', name + ' · —');
     element('metrics').append(row);

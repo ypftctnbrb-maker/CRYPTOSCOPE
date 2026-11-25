@@ -69,3 +69,28 @@ export function trackTradeSegments(adapter, render, clock = globalThis) {
     clock.clearTimeout(retryTimer);
   };
 }
+
+// REST trade windows only prove the volume in the returned sample.
+// An empty bucket has no observations, so the next observed bucket starts a new segment.
+export function tradeHistory(trades) {
+  const seen = new Set();
+  const buckets = [];
+  for (const trade of [...trades].sort((a, b) => a.time - b.time)) {
+    if (seen.has(trade.id)) continue;
+    seen.add(trade.id);
+    const time = Math.floor(trade.time / candleMs) * candleMs;
+    const signed = trade.side === 'Buy' ? trade.quantity : -trade.quantity;
+    const previous = buckets.at(-1);
+    if (previous?.time === time) {
+      previous.delta += signed;
+      previous.cumulative += signed;
+      previous.last = trade.time;
+    } else {
+      const adjacent = previous?.time === time - candleMs;
+      buckets.push({ time, first: trade.time, last: trade.time, delta: signed,
+        segment: adjacent ? previous.segment : trade.time,
+        cumulative: (adjacent ? previous.cumulative : 0) + signed });
+    }
+  }
+  return buckets;
+}
