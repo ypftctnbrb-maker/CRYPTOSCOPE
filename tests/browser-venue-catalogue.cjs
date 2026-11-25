@@ -5,12 +5,35 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { preparePublic } = require('../scripts/prepare-public.cjs');
+const source = process.env.CATALOGUE_SITE_SOURCE || path.resolve(__dirname, '..');
+const { preparePublic } = require(path.join(source, 'scripts/prepare-public.cjs'));
 
 const live = process.env.LIVE === '1';
 const mime = { '.html': 'text/html', '.css': 'text/css', '.json': 'application/json',
   '.js': 'text/javascript', '.mjs': 'text/javascript' };
 const names = ['Bybit', 'Hyperliquid', 'OKX', 'Bitfinex', 'MEXC'];
+
+function protobuf(fields) {
+  const bytes = [];
+  function varint(value) {
+    while (value >= 128) {
+      bytes.push(value % 128 + 128);
+      value = Math.floor(value / 128);
+    }
+    bytes.push(value);
+  }
+  for (const [field, value] of fields) {
+    const binary = typeof value !== 'number';
+    varint(field * 8 + (binary ? 2 : 0));
+    if (!binary) varint(value);
+    else {
+      const data = Buffer.from(value);
+      varint(data.length);
+      bytes.push(...data);
+    }
+  }
+  return Buffer.from(bytes);
+}
 
 async function main() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'venue-browser-'));
@@ -24,13 +47,13 @@ async function main() {
   });
   let browser;
   try {
-    preparePublic(path.resolve(__dirname, '..'), root);
+    preparePublic(source, root);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const proxy = process.env.HTTPS_PROXY;
     browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome',
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
       ...(live && proxy && { proxy: { server: proxy, bypass: '127.0.0.1' } }) });
-    const page = await browser.newPage({ viewport: { width: 390, height: 850 } });
+    const page = await browser.newPage({ viewport: { width: Number(process.env.CATALOGUE_WIDTH || 390), height: 850 } });
     const errors = [], responses = [], failures = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('response', response => {
@@ -38,7 +61,7 @@ async function main() {
     });
     page.on('requestfailed', request => failures.push([request.failure()?.errorText, request.url()]));
     let stream, closed = false, historyRequests = 0, okxClosed = 0, okxTradeHistory = 0, okxTradeStream;
-    const closedExtra = { hyperliquid: 0, bitfinex: 0, mexc: 0 };
+    const closedExtra = { hyperliquid: 0, bitfinex: 0, mexc: 0, mexcSpot: 0 };
     if (!live) {
       await page.route('https://api.bybit.com/**', route => {
         const url = new URL(route.request().url());
@@ -94,6 +117,8 @@ async function main() {
       const currentBucket = () => Math.floor(Date.now() / 300000) * 300000;
       await page.route('https://api.hyperliquid.xyz/info', route => {
         const query = route.request().postDataJSON();
+        if (query.type === 'metaAndAssetCtxs') return route.fulfill({ json:
+          [{ universe: [{ name: 'BTC' }] }, [{ openInterest: '14', funding: '-0.0002' }]] });
         const coin = query.coin ?? query.req.coin;
         const time = currentBucket();
         const candle = { s: coin, i: '5m', t: time, o: '2', h: '3', l: '1', c: '2', v: '6' };
@@ -114,8 +139,13 @@ async function main() {
       });
       await page.route('https://api-pub.bitfinex.com/v2/**', route => {
         const time = currentBucket();
-        return route.fulfill({ json: route.request().url().includes('/candles/')
-          ? [[time, 6, 7, 8, 5, 12]] : [[1, time, -4, 7]] });
+        const url = new URL(route.request().url());
+        if (url.pathname.endsWith('/status/deriv')) {
+          const row = Array(23).fill(null);
+          Object.assign(row, { 0: url.searchParams.get('keys'), 1: time, 11: 0.001, 17: 5 });
+          return route.fulfill({ json: [row] });
+        }
+        return route.fulfill({ json: url.pathname.includes('/candles/') ? [[time, 6, 7, 8, 5, 12]] : [[1, time, -4, 7]] });
       });
       await page.routeWebSocket('wss://api-pub.bitfinex.com/**', socket => {
         socket.onClose(() => { closedExtra.bitfinex++; });
@@ -146,6 +176,28 @@ async function main() {
             ? { symbol, interval, t: currentBucket() / 1000, o: 7, h: 8, l: 6, c: 7, q: 10 }
             : [{ i: '2', t: ts, p: 7, v: 8, T: 1 }];
           socket.send(JSON.stringify({ channel: method.replace('sub.', 'push.'), symbol, data, ts }));
+        });
+      });
+      await page.route('https://api.mexc.com/api/v3/**', route => {
+        const time = currentBucket();
+        return route.fulfill({ json: route.request().url().includes('/klines')
+          ? [[time, '7', '8', '6', '7', '10']] : [{ id: null, time, price: '7', qty: '9', isBuyerMaker: true }] });
+      });
+      await page.routeWebSocket('wss://wbs-api.mexc.com/**', socket => {
+        socket.onClose(() => { closedExtra.mexcSpot++; });
+        socket.onMessage(raw => {
+          const channel = JSON.parse(raw).params?.[0];
+          if (!channel) return;
+          const now = Date.now();
+          const fields = [[1, channel], [3, 'BTCUSDT'], [6, now]];
+          if (channel.includes('.kline.')) {
+            fields.push([308, protobuf([[1, 'Min5'], [2, currentBucket() / 1000],
+              [3, '7'], [4, '7'], [5, '8'], [6, '6'], [7, '10']])]);
+          } else {
+            const deal = protobuf([[1, '7'], [2, '8'], [3, 1], [4, now], [5, 'mexc-spot-1']]);
+            fields.push([314, protobuf([[1, deal]])]);
+          }
+          socket.send(protobuf(fields));
         });
       });
     }
@@ -196,6 +248,9 @@ async function main() {
       return;
     }
     await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('LIVE'));
+    await page.locator('#instrument-cvd-chart canvas').first().waitFor({ timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('#instrument-cvd-chart').dataset.liveBars === '1');
+    assert.equal(await instrument.getAttribute('aria-pressed'), 'true');
     assert.ok(stream);
     await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('OI · 0'));
     await page.waitForFunction(() => document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
@@ -217,6 +272,9 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('OKX swap · BTC-USDT-SWAP · 5m · LIVE') &&
       document.querySelector('#instrument-history-rows').textContent.includes('CVD 0.3 BTC') &&
       document.querySelector('#instrument-metrics').textContent.includes('OI · 7 BTC'));
+    await page.waitForFunction(() => document.querySelector('#instrument-cvd-chart').dataset.liveBars === '1' &&
+      document.querySelector('#instrument-cvd-status').textContent.includes('BTC-USDT-SWAP'));
+    assert.doesNotMatch(await page.locator('#instrument-cvd-status').textContent(), /Bybit/);
     assert.match(await page.locator('#instrument-metrics').innerText(), /сегмент с .* -0.2 BTC/);
     assert.match(await page.locator('#instrument-metrics').innerText(), /Funding · 0.02 %/);
     assert.doesNotMatch(await page.locator('#instrument-history-rows').textContent(), /Bybit|1000PEPE/);
@@ -233,32 +291,40 @@ async function main() {
       document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
     assert.match(await page.locator('#instrument-metrics').innerText(), /сегмент с .* -20 BTC/);
     assert.doesNotMatch(await page.locator('#instrument-metrics').innerText(), /OI · 7 BTC/);
-    for (const [venue, label, id, value, historyValue] of [
+    for (const [venue, label, id, value, historyValue, oi] of [
+      ['bybit', 'Bybit · spot · PEPEUSDT', 'PEPEUSDT', '-3 PEPE', '2 PEPE'],
       ['hyperliquid', 'Hyperliquid · spot · @129', '@129', '-4 MON', '6 MON'],
+      ['hyperliquid', 'Hyperliquid · perp · BTC', 'BTC', '-4 BTC', '6 BTC', '14 BTC'],
       ['bitfinex', 'Bitfinex · spot · BTCUSD', 'BTCUSD', '3 BTC', '-4 BTC'],
-      ['mexc', 'MEXC · perp · BTC_USDT', 'BTC_USDT', '8 контрактов', '-9 контрактов'],
+      ['bitfinex', 'Bitfinex · perp · BTCF0:USTF0', 'BTCF0:USTF0', '3 контрактов', '-4 контрактов', '5 контрактов'],
+      ['mexc', 'MEXC · perp · BTC_USDT', 'BTC_USDT', '8 контрактов', '-9 контрактов', '10 контрактов'],
+      ['mexc', 'MEXC · spot · BTCUSDT', 'BTCUSDT', '8 BTC', null],
     ]) {
       await page.locator('#instrument-venue').selectOption(venue);
       await search.fill(id);
       await page.getByRole('button', { name: label, exact: true }).click();
       await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('LIVE') &&
         document.querySelector('#instrument-metrics').textContent.includes('CVD · LIVE'));
-      await page.waitForFunction(amount => document.querySelector('#instrument-history-rows').textContent.includes('CVD ' + amount), historyValue);
+      await page.waitForFunction(venueName => document.querySelector('#instrument-cvd-chart').dataset.liveBars === '1' &&
+        document.querySelector('#instrument-cvd-status').textContent.startsWith(venueName), label.split(' · ')[0]);
+      await page.waitForFunction(amount => document.querySelector('#instrument-history-rows').textContent.includes(amount),
+        historyValue ? 'CVD ' + historyValue : 'REST без ID');
+      await page.waitForFunction(expected => document.querySelector('#instrument-metrics').textContent.includes(expected), 'OI · ' + (oi || '—'));
       assert.match(await page.locator('#instrument-metrics').innerText(), new RegExp('сегмент с .* ' + value));
-      assert.doesNotMatch(await page.locator('#instrument-history-rows').textContent(), /Bybit|OKX/);
+      assert.match(await page.locator('#instrument-history-rows').textContent(), new RegExp(label.split(' · ')[0]));
     }
     await page.locator('#instrument-venue').selectOption('bybit');
     await search.fill('PEPEUSDT');
     await instrument.click();
     await page.waitForFunction(() => document.querySelector('#instrument-history-rows').textContent.includes('Bybit'));
     for (let index = 0; index < 50 && (!closed || okxClosed < 4 ||
-      Object.values(closedExtra).some(count => count < 2)); index++) await new Promise(resolve => setTimeout(resolve, 20));
+      closedExtra.hyperliquid < 4 || closedExtra.bitfinex < 4 || closedExtra.mexc < 2 || closedExtra.mexcSpot < 2); index++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal(closed, true);
     assert.ok(okxClosed >= 4);
-    assert.deepEqual(closedExtra, { hyperliquid: 2, bitfinex: 2, mexc: 2 });
+    assert.deepEqual(closedExtra, { hyperliquid: 4, bitfinex: 4, mexc: 2, mexcSpot: 2 });
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    console.log('PASS: all venue scopes, Hyperliquid native ID, five venue candles, partial historical CVD, live CVD, instrument switching and socket cleanup');
+    console.log('PASS: all venue scopes, Hyperliquid native ID, spot/perp price and CVD candles for five venues, partial REST history, instrument switching and socket cleanup');
   } finally {
     await browser?.close();
     server.close();
