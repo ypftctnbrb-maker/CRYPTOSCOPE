@@ -13,6 +13,12 @@ const candle = (time, open, high, low, close, volume) => {
   return { time: timestamp / 1000, open: prices[0], high: prices[1], low: prices[2], close: prices[3], volume: prices[4] };
 };
 
+function normalizeTrade(id, size, timestamp, rate, side) {
+  const quantity = number(size), time = number(timestamp), price = number(rate);
+  return typeof id === 'string' && id && ['Buy', 'Sell'].includes(side) &&
+    quantity > 0 && time > 0 && price > 0 ? { id, quantity, time, price, side } : null;
+}
+
 async function publicJson(url, signal) {
   if (Date.now() < retryAt) throw rateLimit();
   const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) });
@@ -20,7 +26,7 @@ async function publicJson(url, signal) {
     const after = response.headers.get('Retry-After');
     const now = Date.now();
     const deadline = after && /^\d+$/.test(after) ? now + Number(after) * 1000 : Date.parse(after);
-    retryAt = Math.max(retryAt, now + 30000, Number.isFinite(deadline) ? deadline : 0);
+    retryAt = Math.max(retryAt, now + 30000, Number.isFinite(deadline) ? Math.min(deadline, now + 120000) : 0);
     throw rateLimit();
   }
   if (!response.ok) throw Error('HTTP ' + response.status);
@@ -38,6 +44,28 @@ export function bybitAdapter(instrument, getJson = publicJson) {
     if (result.retCode !== undefined && result.retCode !== 0) throw Error('Bybit ' + result.retCode + ': ' + result.retMsg);
     return { rows: result.result.list, timestamp: number(result.time) };
   }
+  function stream(topic, onRows, onDisconnect) {
+    const socket = new WebSocket('wss://stream.bybit.com/v5/public/' + category);
+    let ping;
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ op: 'subscribe', args: [topic] }));
+      ping = setInterval(() => socket.readyState === 1 && socket.send('{"op":"ping"}'), 20000);
+    };
+    socket.onmessage = ({ data }) => {
+      try {
+        const response = JSON.parse(data);
+        if (response.op === 'subscribe' && response.success === false) onDisconnect();
+        if (response.topic !== topic) return;
+        if (Array.isArray(response.data)) onRows(response.data, response);
+      } catch { /* Ignore malformed frames. */ }
+    };
+    socket.onerror = socket.onclose = onDisconnect;
+    return () => {
+      clearInterval(ping);
+      socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+      socket.close();
+    };
+  }
   return {
     source, category, volumeUnit, priceStep: number(instrument.precision?.price),
     async getCandles(signal) {
@@ -48,10 +76,8 @@ export function bybitAdapter(instrument, getJson = publicJson) {
       const { rows, timestamp } = await query('recent-trade', { limit: '60' }, signal);
       const trades = new Map();
       for (const row of rows) {
-        const quantity = number(row.size), time = number(row.time), price = number(row.price);
-        if (!row.execId || !['Buy', 'Sell'].includes(row.side) || quantity === null || quantity < 0 ||
-          time === null || time <= 0 || price === null || price <= 0) continue;
-        trades.set(row.execId, { id: row.execId, quantity, time, price, side: row.side });
+        const trade = normalizeTrade(row.execId, row.size, row.time, row.price, row.side);
+        if (trade) trades.set(trade.id, trade);
       }
       return { source, timestamp, unit: volumeUnit, trades: [...trades.values()].sort((a, b) => a.time - b.time) };
     },
@@ -67,30 +93,19 @@ export function bybitAdapter(instrument, getJson = publicJson) {
       return { source, value: number(rows[0]?.fundingRate), timestamp: number(rows[0]?.fundingRateTimestamp), unit: 'ratio' };
     },
     streamCandles(onCandle, onDisconnect) {
-      const socket = new WebSocket('wss://stream.bybit.com/v5/public/' + category);
-      const topic = 'kline.5.' + symbol;
-      let ping;
-      socket.onopen = () => {
-        socket.send(JSON.stringify({ op: 'subscribe', args: [topic] }));
-        ping = setInterval(() => socket.readyState === 1 && socket.send('{"op":"ping"}'), 20000);
-      };
-      socket.onmessage = ({ data }) => {
-        try {
-          const response = JSON.parse(data);
-          if (response.op === 'subscribe' && response.success === false) onDisconnect();
-          if (response.topic !== topic) return;
-          for (const row of response.data) {
-            const next = candle(row.start, row.open, row.high, row.low, row.close, row.volume);
-            if (next) onCandle(next, number(row.timestamp ?? response.ts));
-          }
-        } catch { /* Ignore malformed frames. */ }
-      };
-      socket.onerror = socket.onclose = onDisconnect;
-      return () => {
-        clearInterval(ping);
-        socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
-        socket.close();
-      };
+      return stream('kline.5.' + symbol, (rows, response) => {
+        for (const row of rows) {
+          const next = candle(row.start, row.open, row.high, row.low, row.close, row.volume);
+          if (next) onCandle(next, number(row.timestamp ?? response.ts));
+        }
+      }, onDisconnect);
+    },
+    streamTrades(onTrades, onDisconnect) {
+      return stream('publicTrade.' + symbol, rows => {
+        const trades = rows.filter(row => row.s === symbol)
+          .map(row => normalizeTrade(row.i, row.v, row.T, row.p, row.S)).filter(Boolean);
+        if (trades.length) onTrades(trades);
+      }, onDisconnect);
     },
   };
 }

@@ -1,5 +1,6 @@
 import { venueNames, reconcileScopes, searchCatalogue, refreshCatalogue } from './venue-catalogue.mjs';
 import { bybitAdapter } from './bybit-market.mjs';
+import { trackTradeSegments } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
 const storageKey = 'cryptoscope-venue-catalogue-v1';
@@ -69,7 +70,25 @@ function open(market) {
   const active = () => !controller.signal.aborted;
   let chart, resize, closeSocket, timer, delay = 1000;
   const status = message => { element('chart-status').textContent = adapter.source + ' · 5m · ' + message; };
+  const tradeRow = text('li', '');
+  element('metrics').append(tradeRow);
+  const stopTrades = trackTradeSegments(adapter, ({ state, segment }) => {
+    const label = 'CVD · ';
+    if (state === 'waiting') {
+      tradeRow.textContent = label + 'ожидание сделок · история до сегмента недоступна';
+      return;
+    }
+    if (state === 'stale') {
+      tradeRow.textContent = label + 'данные устарели · переподключение';
+      return;
+    }
+    const amount = value => show(Number(value.toPrecision(12)), adapter.volumeUnit);
+    tradeRow.textContent = label + 'LIVE · Δ 5m (' + timestamp(segment.candle) + ') ' + amount(segment.delta) +
+      ' · сегмент с ' + timestamp(segment.start) + ' · ' + amount(segment.cumulative) + ' · сделка ' + timestamp(segment.latest);
+  });
   selection = { market, stop() {
+    stopTrades();
+    tradeRow.textContent = 'CVD · обновление приостановлено';
     controller.abort();
     clearTimeout(timer);
     closeSocket?.();
