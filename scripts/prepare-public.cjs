@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const publicFiles = ['index.html', 'about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html',
   'assets/app.js', 'assets/lightweight-charts-4.2.3.js', 'assets/lightweight-charts-LICENSE.txt', 'assets/styles.css', 'assets/information.css',
   'assets/config.js', 'assets/referrals.js', 'assets/referrals.css', 'assets/referral-market.js',
-  'instruments.html', 'assets/venue-catalogue.json', 'assets/venue-catalogue.mjs', 'assets/bybit-market.mjs', 'assets/okx-market.mjs', 'assets/public-market.mjs', 'assets/hyperliquid-market.mjs', 'assets/bitfinex-market.mjs', 'assets/mexc-market.mjs', 'assets/mexc-protobuf.mjs', 'assets/instruments.mjs', 'assets/instrument-trades.mjs', 'assets/instruments.css', 'assets/venue-discovery.mjs', 'assets/venue-discovery-sources.mjs'];
+  'instruments.html', 'assets/venue-catalogue.json', 'assets/venue-catalogue.mjs', 'assets/bybit-market.mjs', 'assets/okx-market.mjs', 'assets/public-market.mjs', 'assets/hyperliquid-market.mjs', 'assets/bitfinex-market.mjs', 'assets/mexc-market.mjs', 'assets/mexc-protobuf.mjs', 'assets/instruments.mjs', 'assets/instrument-trades.mjs', 'assets/instrument-charts.mjs', 'assets/instruments.css', 'assets/venue-discovery.mjs', 'assets/venue-discovery-sources.mjs'];
 
 function preparePublic(source, destination) {
   const reports = path.join(source, 'reports');

@@ -4,6 +4,7 @@ import { okxAdapter, resolveOkxContract } from './okx-market.mjs';
 import { hyperliquidAdapter } from './hyperliquid-market.mjs';
 import { bitfinexAdapter } from './bitfinex-market.mjs';
 import { mexcAdapter } from './mexc-market.mjs';
+import { candleStyle, chartStyle, createCvdChart } from './instrument-charts.mjs';
 import { trackTradeSegments, tradeHistory } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
@@ -11,7 +12,8 @@ const storageKey = 'cryptoscope-venue-catalogue-v1';
 const pageSize = 50;
 const adapters = { bybit: bybitAdapter, okx: okxAdapter, hyperliquid: hyperliquidAdapter,
   bitfinex: bitfinexAdapter, mexc: mexcAdapter };
-let catalogue = {}, offset = 0, selection;
+let catalogue = {}, offset = 0, selection, selectedKey;
+const marketKey = market => JSON.stringify([market.venue, market.type, market.id]);
 const text = (tag, content) => Object.assign(document.createElement(tag), { textContent: content });
 const timestamp = value => value && Number.isFinite(new Date(value).valueOf())
   ? new Date(value).toLocaleString('ru-RU') : 'время неизвестно';
@@ -30,6 +32,8 @@ function render() {
       market.active === null ? 'статус неизвестен' : market.stale ? 'из сохранённого каталога' : ''].filter(Boolean).join(' · ');
     const button = text('button', label);
     button.type = 'button';
+    button.dataset.marketKey = marketKey(market);
+    button.setAttribute('aria-pressed', String(button.dataset.marketKey === selectedKey));
     button.addEventListener('click', () => open(market));
     const row = document.createElement('li');
     row.append(button);
@@ -63,6 +67,10 @@ function stopSelection() {
 
 async function open(market) {
   stopSelection();
+  selectedKey = marketKey(market);
+  for (const button of element('results').querySelectorAll('button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.marketKey === selectedKey));
+  }
   element('detail').hidden = false;
   element('title').textContent = [venueNames[market.venue], market.type, market.id].join(' · ');
   element('metrics').replaceChildren();
@@ -70,6 +78,8 @@ async function open(market) {
   history.hidden = true;
   element('history-rows').replaceChildren();
   element('chart').hidden = true;
+  element('cvd-chart').hidden = true;
+  element('cvd-status').textContent = '—';
   if (!Object.hasOwn(adapters, market.venue) || market.active !== true) {
     element('chart-status').textContent = 'Метрики этого инструмента недоступны · каталог от ' + timestamp(market.observedAt);
     return;
@@ -91,6 +101,8 @@ async function open(market) {
   const adapter = adapters[market.venue](instrument);
   let chart, resize, closeSocket, timer, delay = 1000;
   const status = message => { element('chart-status').textContent = adapter.source + ' · 5m · ' + message; };
+  const cvd = createCvdChart(element('cvd-chart'), adapter.volumeUnit);
+  const cvdStatus = element('cvd-status');
   const amount = (value, unit) => show(Number(value.toPrecision(12)), unit);
   const tradeRow = text('li', '');
   element('metrics').append(tradeRow);
@@ -103,7 +115,9 @@ async function open(market) {
     historyRows.replaceChildren(text('li', 'Загрузка ' + adapter.source));
     request.then(snapshot => {
       if (!active() || currentTrades !== request) return;
-      const rows = tradeHistory(snapshot.trades).map(bucket => text('li', timestamp(bucket.time) +
+      const buckets = tradeHistory(snapshot.trades);
+      cvd.setHistory(buckets);
+      const rows = buckets.map(bucket => text('li', timestamp(bucket.time) +
         ' · Δ ' + amount(bucket.delta, snapshot.unit) + ' · CVD ' + amount(bucket.cumulative, snapshot.unit) +
         ' · сегмент с ' + timestamp(bucket.segment) + ' · сделки ' +
         timestamp(bucket.first) + ' — ' + timestamp(bucket.last)));
@@ -122,19 +136,26 @@ async function open(market) {
     const label = 'CVD · ';
     if (state === 'waiting') {
       if (reconnecting) loadHistory();
+      cvdStatus.textContent = adapter.source + ' · ожидание свежих сделок';
       tradeRow.textContent = label + 'ожидание сделок · история до сегмента недоступна';
       return;
     }
     if (state === 'stale') {
       reconnecting = true;
+      cvdStatus.textContent = adapter.source + ' · данные устарели · переподключение';
       tradeRow.textContent = label + 'данные устарели · переподключение';
       return;
     }
+    cvd.setLive(segment.bars);
+    cvdStatus.textContent = adapter.source + ' · LIVE · сделка ' + timestamp(segment.latest) +
+      ' · сегмент с ' + timestamp(segment.start);
     tradeRow.textContent = label + 'LIVE · Δ 5m (' + timestamp(segment.candle) + ') ' + amount(segment.delta, adapter.volumeUnit) +
       ' · сегмент с ' + timestamp(segment.start) + ' · ' + amount(segment.cumulative, adapter.volumeUnit) + ' · сделка ' + timestamp(segment.latest);
   });
   selection = { market, stop() {
     stopTrades();
+    cvd.stop();
+    cvdStatus.textContent = 'Обновление приостановлено';
     tradeRow.textContent = 'CVD · обновление приостановлено';
     controller.abort();
     clearTimeout(timer);
@@ -164,7 +185,7 @@ async function open(market) {
   const step = adapter.priceStep;
   const host = element('chart');
   const volumeBar = row => ({ time: row.time, value: row.volume,
-    color: row.close >= row.open ? 'rgba(54,213,160,.35)' : 'rgba(255,101,126,.35)' });
+    color: row.close >= row.open ? 'rgba(131,169,149,.35)' : 'rgba(183,119,123,.35)' });
   let prices, volumes;
   function retry(retryAt = 0) {
     if (!active()) return;
@@ -182,14 +203,14 @@ async function open(market) {
       if (!snapshot.candles.length) throw Error('No candles');
       if (!chart) {
         host.hidden = false;
-        chart = window.LightweightCharts.createChart(host, { width: host.clientWidth, height: 300 });
+        chart = window.LightweightCharts.createChart(host, { ...chartStyle, width: host.clientWidth, height: host.clientHeight });
         const priceFormat = step > 0 ? { type: 'price', minMove: step } : {
           type: 'custom', formatter: value => value.toLocaleString('ru-RU', { maximumSignificantDigits: 10 }),
         };
-        prices = chart.addCandlestickSeries({ priceFormat });
+        prices = chart.addCandlestickSeries({ ...candleStyle, priceFormat });
         volumes = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' } });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-        resize = new ResizeObserver(() => chart.applyOptions({ width: host.clientWidth }));
+        resize = new ResizeObserver(() => chart.applyOptions({ width: host.clientWidth, height: host.clientHeight }));
         resize.observe(host);
       }
       prices.setData(snapshot.candles);
