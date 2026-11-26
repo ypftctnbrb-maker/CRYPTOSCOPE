@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.bybit.com https://api.hyperliquid.xyz https://www.okx.com https://api-pub.bitfinex.com https://api.mexc.com https://contract.mexc.com wss://stream.bybit.com wss://ws.okx.com:8443 wss://api.hyperliquid.xyz wss://api-pub.bitfinex.com wss://wbs-api.mexc.com wss://contract.mexc.com; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.bybit.com https://api.hyperliquid.xyz https://www.okx.com https://api-pub.bitfinex.com https://api.mexc.com https://contract.mexc.com wss://stream.bybit.com wss://ws.okx.com:8443 wss://api.hyperliquid.xyz wss://api-pub.bitfinex.com wss://wbs-api.mexc.com wss://contract.mexc.com; base-uri 'none'; object-src 'none'; form-action 'none'">
 <title>Инструменты бирж | CRYPTOSCOPE</title>
 <link rel="stylesheet" href="./assets/styles.css?v=4426d06ab4e9">
-<link rel="stylesheet" href="./assets/instruments.css?v=36841b77683b">
+<link rel="stylesheet" href="./assets/instruments.css?v=2b3857e825a2">
 <script defer src="./assets/lightweight-charts-4.2.3.js?v=c7dda807d662"></script>
-<script type="module" src="./assets/instruments.mjs?v=fff23461a120"></script>
+<script type="module" src="./assets/instruments.mjs?v=e4c794c50b97"></script>
 <link rel="stylesheet" href="./assets/referrals.css?v=837b64a25b3e">
 <script defer src="./assets/config.js?v=7240b0e4d6f3"></script>
 <script defer src="./assets/referrals.js?v=eeb7fe2c65c9"></script>
@@ -16,6 +16,10 @@
 <body>
 <header><nav><a class="brand" href="./index.html">CRYPTOSCOPE</a><div class="referral-slot" data-bingx-placement="header" data-bingx-label="Торговать на BingX"></div></nav></header>
 <main class="instrument-page">
+<figure id="instrument-sphere" class="instrument-sphere" aria-label="Декоративная сфера выбранного актива">
+  <canvas aria-hidden="true"></canvas>
+  <div id="instrument-sphere-logo" class="instrument-sphere-logo" aria-hidden="true"></div>
+</figure>
 <h1>Рынки CRYPTOSCOPE 4.0</h1>
 <div class="instrument-workspace">
 <aside class="instrument-panel instrument-catalogue" aria-label="Каталог инструментов">

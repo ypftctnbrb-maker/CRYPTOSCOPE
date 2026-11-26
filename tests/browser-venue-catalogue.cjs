@@ -10,7 +10,7 @@ const { preparePublic } = require(path.join(source, 'scripts/prepare-public.cjs'
 
 const live = process.env.LIVE === '1';
 const mime = { '.html': 'text/html', '.css': 'text/css', '.json': 'application/json',
-  '.js': 'text/javascript', '.mjs': 'text/javascript' };
+  '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml' };
 const names = ['Bybit', 'Hyperliquid', 'OKX', 'Bitfinex', 'MEXC'];
 
 function protobuf(fields) {
@@ -51,9 +51,27 @@ async function main() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const proxy = process.env.HTTPS_PROXY;
     browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome',
-      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-webgl'],
       ...(live && proxy && { proxy: { server: proxy, bypass: '127.0.0.1' } }) });
     const page = await browser.newPage({ viewport: { width: Number(process.env.CATALOGUE_WIDTH || 390), height: 850 } });
+    await page.addInitScript(() => {
+      const request = window.requestAnimationFrame.bind(window);
+      const cancel = window.cancelAnimationFrame.bind(window);
+      const pending = new Set();
+      window.sphereFrames = { samples: [], max: 0, pending };
+      window.requestAnimationFrame = callback => {
+        if (callback.name !== 'tick') return request(callback);
+        const id = request(time => {
+          pending.delete(id);
+          window.sphereFrames.samples.push(time);
+          callback(time);
+        });
+        pending.add(id);
+        window.sphereFrames.max = Math.max(window.sphereFrames.max, pending.size);
+        return id;
+      };
+      window.cancelAnimationFrame = id => { pending.delete(id); cancel(id); };
+    });
     const errors = [], responses = [], failures = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('response', response => {
@@ -202,6 +220,28 @@ async function main() {
       });
     }
     await page.goto('http://127.0.0.1:' + server.address().port + '/instruments.html');
+    await page.locator('#instrument-sphere canvas').waitFor({ timeout: 5000 });
+    const sphere = page.locator('#instrument-sphere');
+    const logo = page.locator('#instrument-sphere-logo');
+    await page.waitForFunction(() => {
+      const logo = document.querySelector('#instrument-sphere-logo');
+      return logo.dataset.asset === 'BTC' && logo.querySelector('img')?.naturalWidth > 0;
+    }, null, { timeout: 5000 });
+    assert.equal(await page.evaluate(() => document.createElement('canvas').getContext('webgl') === null), true);
+    await page.waitForFunction(() => window.sphereFrames.samples.length > 3);
+    const evidence = process.env.SPHERE_EVIDENCE;
+    if (evidence) {
+      await page.waitForTimeout(450);
+      await sphere.screenshot({ path: path.join(evidence, 'sphere-' + page.viewportSize().width + '.png') });
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForFunction(() => window.sphereFrames.pending.size === 0);
+    const frozen = await sphere.locator('canvas').evaluate(node => node.toDataURL());
+    await page.waitForTimeout(120);
+    assert.equal(await sphere.locator('canvas').evaluate(node => node.toDataURL()), frozen);
+    assert.equal(await logo.locator('img').evaluate(node => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForFunction(() => window.sphereFrames.pending.size === 1);
     await page.waitForFunction(() => document.querySelector('#instrument-next').disabled === false &&
       document.querySelector('#instrument-count').textContent.includes('Инструментов'));
     const coverage = await page.locator('#instrument-coverage').textContent();
@@ -213,6 +253,8 @@ async function main() {
     await search.fill('PEPEUSDT');
     const instrument = page.getByRole('button', { name: 'Bybit · perp · 1000PEPEUSDT', exact: true });
     await instrument.click();
+    await page.waitForFunction(() => document.querySelector('#instrument-sphere-logo')?.dataset.asset === '1000PEPE', null, { timeout: 5000 });
+    assert.equal(await logo.locator('img').count(), 0);
     if (live) {
       for (const [id, type] of [['1000PEPEUSDT', 'perp'], ['XDCUSDT', 'perp'], ['NEARUSD', 'perp'], ['PEPEUSDT', 'spot']]) {
         await search.fill(id);
@@ -322,6 +364,51 @@ async function main() {
     assert.equal(closed, true);
     assert.ok(okxClosed >= 4);
     assert.deepEqual(closedExtra, { hyperliquid: 4, bitfinex: 4, mexc: 2, mexcSpot: 2 });
+    await page.locator('#instrument-venue').selectOption('okx');
+    for (const [id, brand] of [['ETH-USDT', 'ethereum'], ['SOL-USDT', 'solana'], ['BTC-USDT', 'bitcoin']]) {
+      await search.fill(id);
+      await page.getByRole('button', { name: 'OKX · spot · ' + id, exact: true }).click();
+      await page.waitForFunction(expected => {
+        const logo = document.querySelector('#instrument-sphere-logo');
+        return logo.dataset.logo === expected && logo.querySelector('img')?.naturalWidth > 0;
+      }, brand);
+    }
+    await sphere.evaluate(node => node.scrollIntoView({ block: 'start', behavior: 'instant' }));
+    await page.waitForFunction(() => window.sphereFrames.pending.size === 1, null, { polling: 50 });
+    assert.equal(await page.evaluate(() => window.sphereFrames.max), 1);
+    if (evidence && page.viewportSize().width === 1440) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Performance.enable');
+      const before = (await cdp.send('Performance.getMetrics')).metrics;
+      const timing = await page.evaluate(() => {
+        window.sphereFrames.samples.length = 0;
+        return new Promise(resolve => setTimeout(() => {
+          const frames = window.sphereFrames.samples;
+          const intervals = frames.slice(1).map((time, index) => time - frames[index]).sort((a, b) => a - b);
+          resolve({ count: frames.length, elapsed: frames.at(-1) - frames[0], p95: intervals[Math.floor(intervals.length * .95)] });
+        }, 2000));
+      });
+      const after = (await cdp.send('Performance.getMetrics')).metrics;
+      for (const metric of ['TaskDuration', 'ScriptDuration', 'JSHeapUsedSize']) {
+        timing[metric] = after.find(row => row.name === metric).value - before.find(row => row.name === metric).value;
+      }
+      await cdp.detach();
+      console.log('SPHERE_TIMING', JSON.stringify(timing));
+      await page.screenshot({ path: path.join(evidence, 'market-1440.png'), fullPage: true });
+      if (process.env.SPHERE_FRAMES) {
+        const clip = await sphere.boundingBox();
+        const start = Date.now();
+        for (let index = 0; index < 30; index++) {
+          const delay = start + index * 100 - Date.now();
+          if (delay > 0) await page.waitForTimeout(delay);
+          await page.screenshot({ clip, path: path.join(process.env.SPHERE_FRAMES, 'sphere-' + index + '.png') });
+        }
+      }
+    }
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+    await page.waitForFunction(() => window.sphereFrames.pending.size === 0);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow')));
+    await page.waitForFunction(() => window.sphereFrames.pending.size === 1);
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     console.log('PASS: all venue scopes, Hyperliquid native ID, spot/perp price and CVD candles for five venues, partial REST history, instrument switching and socket cleanup');

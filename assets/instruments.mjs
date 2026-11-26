@@ -1,3 +1,4 @@
+import { mountMarketSphere } from './market-sphere.mjs';
 import { venueNames, reconcileScopes, searchCatalogue, refreshCatalogue } from './venue-catalogue.mjs';
 import { bybitAdapter } from './bybit-market.mjs';
 import { okxAdapter, resolveOkxContract } from './okx-market.mjs';
@@ -8,6 +9,7 @@ import { candleStyle, chartStyle, createCvdChart } from './instrument-charts.mjs
 import { trackTradeSegments, tradeHistory } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
+const sphere = mountMarketSphere(element('sphere'), element('sphere-logo'));
 const storageKey = 'cryptoscope-venue-catalogue-v1';
 const pageSize = 50;
 const adapters = { bybit: bybitAdapter, okx: okxAdapter, hyperliquid: hyperliquidAdapter,
@@ -67,6 +69,7 @@ function stopSelection() {
 
 async function open(market) {
   stopSelection();
+  sphere.select(market);
   selectedKey = marketKey(market);
   for (const button of element('results').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.marketKey === selectedKey));
