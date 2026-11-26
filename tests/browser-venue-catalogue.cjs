@@ -47,7 +47,9 @@ async function main() {
   });
   let browser;
   try {
-    preparePublic(source, root);
+    const preview = process.env.CATALOGUE_PREVIEW_ROOT;
+    if (preview) await fs.cp(preview, root, { recursive: true });
+    else preparePublic(source, root);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const proxy = process.env.HTTPS_PROXY;
     browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome',
@@ -220,6 +222,7 @@ async function main() {
       });
     }
     await page.goto('http://127.0.0.1:' + server.address().port + '/instruments.html');
+    if (preview) await page.getByLabel('Тестовая сборка').getByText(/CRYPTOSCOPE PREVIEW/).waitFor();
     await page.locator('#instrument-sphere canvas').waitFor({ timeout: 5000 });
     const sphere = page.locator('#instrument-sphere');
     const logo = page.locator('#instrument-sphere-logo');
