@@ -5,7 +5,7 @@ import { okxAdapter, resolveOkxContract } from './okx-market.mjs';
 import { hyperliquidAdapter } from './hyperliquid-market.mjs';
 import { bitfinexAdapter } from './bitfinex-market.mjs';
 import { mexcAdapter } from './mexc-market.mjs';
-import { candleStyle, chartStyle, createCvdChart } from './instrument-charts.mjs';
+import { candleStyle, chartStyle, createCvdChart, groupPriceBars, movingAverage } from './instrument-charts.mjs';
 import { trackTradeSegments, tradeHistory } from './instrument-trades.mjs';
 
 const element = id => document.getElementById('instrument-' + id);
@@ -14,7 +14,15 @@ const storageKey = 'cryptoscope-venue-catalogue-v1';
 const pageSize = 50;
 const adapters = { bybit: bybitAdapter, okx: okxAdapter, hyperliquid: hyperliquidAdapter,
   bitfinex: bitfinexAdapter, mexc: mexcAdapter };
-let catalogue = {}, offset = 0, selection, selectedKey;
+let catalogue = {}, offset = 0, selection, selectedKey, timeframe = 5, redrawPrice;
+let favoritesOnly = false;
+const favoritesKey = 'cryptoscope-instrument-favorites-v1';
+let favorites = new Set();
+try {
+  const saved = JSON.parse(localStorage.getItem(favoritesKey));
+  if (Array.isArray(saved)) favorites = new Set(saved.filter(value => typeof value === 'string'));
+} catch { /* Favorites are session-only when storage is unavailable. */ }
+
 const marketKey = market => JSON.stringify([market.venue, market.type, market.id]);
 const text = (tag, content) => Object.assign(document.createElement(tag), { textContent: content });
 const timestamp = value => value && Number.isFinite(new Date(value).valueOf())
@@ -23,7 +31,10 @@ const statusLabels = { complete: 'полный', partial: 'частичный', 
 const show = (value, unit = '') => value == null ? '—' : value + (unit ? ' ' + unit : '');
 
 function render() {
-  const { total, markets } = searchCatalogue(catalogue, element('search').value, {
+  const source = favoritesOnly ? Object.fromEntries(Object.entries(catalogue).map(([venue, scopes]) =>
+    [venue, scopes.map(scope => ({ ...scope, markets: scope.markets.filter(market => favorites.has(marketKey(market))),
+      unknownMarkets: (scope.unknownMarkets ?? []).filter(market => favorites.has(marketKey(market))) }))])) : catalogue;
+  const { total, markets } = searchCatalogue(source, element('search').value, {
     venue: element('venue').value, type: element('type').value, offset, limit: pageSize,
   });
   element('count').textContent = 'Инструментов: ' + total + (total ? ' · ' + (offset + 1) + '–' + Math.min(total, offset + pageSize) : '');
@@ -65,12 +76,19 @@ async function refresh() {
 function stopSelection() {
   selection?.stop();
   selection = null;
+  redrawPrice = undefined;
 }
 
 async function open(market) {
   stopSelection();
   sphere.select(market);
   selectedKey = marketKey(market);
+  updateFavorite();
+  element('ohlc').textContent = 'O — · H — · L — · C —';
+  element('volume').textContent = '—';
+  element('summary').textContent = 'Ожидание цены и объёма выбранного рынка.';
+  element('btc').textContent = '—';
+  element('btc-source').textContent = 'Котировка появится при выборе рынка BTC';
   for (const button of element('results').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.marketKey === selectedKey));
   }
@@ -103,7 +121,7 @@ async function open(market) {
   }
   const adapter = adapters[market.venue](instrument);
   let chart, resize, closeSocket, timer, delay = 1000;
-  const status = message => { element('chart-status').textContent = adapter.source + ' · 5m · ' + message; };
+  const status = message => { element('chart-status').textContent = adapter.source + ' · ' + (timeframe === 5 ? '5m' : timeframe + 'm из 5m · текущий интервал неполный') + ' · ' + message; };
   const cvd = createCvdChart(element('cvd-chart'), adapter.volumeUnit);
   const cvdStatus = element('cvd-status');
   const amount = (value, unit) => show(Number(value.toPrecision(12)), unit);
@@ -189,13 +207,39 @@ async function open(market) {
   const host = element('chart');
   const volumeBar = row => ({ time: row.time, value: row.volume,
     color: row.close >= row.open ? 'rgba(131,169,149,.35)' : 'rgba(183,119,123,.35)' });
-  let prices, volumes;
+  let prices, volumes, average, rawBars = [], priceSource, priceTime, priceState = 'история';
+  const displayPrice = value => value.toLocaleString('ru-RU', { maximumSignificantDigits: 9 });
+  function paintPrice(fit) {
+    if (!chart) return;
+    const rows = groupPriceBars(rawBars, timeframe);
+    prices.setData(rows);
+    volumes.setData(rows.filter(row => row.volume != null).map(volumeBar));
+    average.setData(movingAverage(rows, 7, timeframe * 60));
+    if (fit) chart.timeScale().fitContent();
+    status(priceState + ' · ' + timestamp(priceTime) + ' · объём: ' + show(priceSource));
+    const last = rows.at(-1);
+    element('ohlc').textContent = last
+      ? ['O', 'H', 'L', 'C'].map((label, index) => label + ' ' + displayPrice(last[['open','high','low','close'][index]])).join(' · ')
+      : 'O — · H — · L — · C —';
+    element('volume').textContent = show(last?.volume, priceSource);
+    const change = last?.open > 0 ? (last.close / last.open - 1) * 100 : null;
+    element('summary').textContent = change === null ? 'Нет непрерывной выборки для этого интервала.'
+      : 'Изменение внутри свечи: ' + displayPrice(change) + '% · ' + adapter.source + ' · ' + timestamp(priceTime);
+    if (market.base === 'BTC' && last) {
+      element('btc').textContent = displayPrice(last.close) + (market.quote ? ' ' + market.quote : '');
+      element('btc-source').textContent = adapter.source + ' · ' + priceState + ' · ' + timestamp(priceTime);
+    }
+  }
+  redrawPrice = () => paintPrice(true);
   function retry(retryAt = 0) {
     if (!active()) return;
     clearTimeout(timer);
     closeSocket?.();
     closeSocket = null;
-    status('данные устарели · переподключение');
+    priceState = 'данные устарели · переподключение';
+    status(priceState);
+    element('summary').textContent = 'Последняя свеча устарела. Переподключение к ' + adapter.source + '.';
+    if (market.base === 'BTC') element('btc-source').textContent = adapter.source + ' · данные устарели · ' + timestamp(priceTime);
     timer = setTimeout(connect, Math.max(delay, retryAt - Date.now()));
     delay = Math.min(delay * 2, 30000);
   }
@@ -211,30 +255,37 @@ async function open(market) {
           type: 'custom', formatter: value => value.toLocaleString('ru-RU', { maximumSignificantDigits: 10 }),
         };
         prices = chart.addCandlestickSeries({ ...candleStyle, priceFormat });
+        average = chart.addLineSeries({ color: '#c49bef', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'MA 7' });
         volumes = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' } });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
         resize = new ResizeObserver(() => chart.applyOptions({ width: host.clientWidth, height: host.clientHeight }));
         resize.observe(host);
       }
-      prices.setData(snapshot.candles);
-      volumes.setData(snapshot.candles.map(volumeBar));
-      chart.timeScale().fitContent();
+      rawBars = snapshot.candles.slice();
+      priceSource = snapshot.unit;
+      priceTime = snapshot.timestamp;
+      priceState = 'история';
+      paintPrice(true);
       let lastTime = snapshot.candles.at(-1).time;
       let lastEvent = 0;
       const watch = () => {
         clearTimeout(timer);
         timer = setTimeout(retry, 30000);
       };
-      status('история · ' + timestamp(snapshot.timestamp) + ' · объём: ' + show(snapshot.unit));
       closeSocket = adapter.streamCandles((candle, eventTime) => {
         if (!active() || candle.time < lastTime || !eventTime || eventTime <= lastEvent) return;
         if (candle.time > lastTime + 300) return retry();
-        prices.update(candle);
-        volumes.update(volumeBar(candle));
+        if (candle.time === lastTime) rawBars[rawBars.length - 1] = candle;
+        else {
+          rawBars.push(candle);
+          if (rawBars.length > 600) rawBars.shift();
+        }
+        priceTime = eventTime;
+        priceState = 'LIVE';
+        paintPrice(false);
         lastTime = candle.time;
         lastEvent = eventTime;
         delay = 1000;
-        status('LIVE · ' + timestamp(eventTime) + ' · объём: ' + show(snapshot.unit));
         watch();
       }, () => retry());
       watch();
@@ -245,6 +296,39 @@ async function open(market) {
   status('загрузка');
   connect();
 }
+
+function updateFavorite() {
+  const button = element('favorite');
+  const saved = favorites.has(selectedKey);
+  button.disabled = !selectedKey;
+  button.setAttribute('aria-pressed', String(saved));
+  button.setAttribute('aria-label', saved ? 'Убрать из избранного' : 'Добавить в избранное');
+  button.textContent = saved ? '★' : '☆';
+}
+element('favorite').addEventListener('click', () => {
+  if (!selectedKey) return;
+  if (favorites.has(selectedKey)) favorites.delete(selectedKey);
+  else favorites.add(selectedKey);
+  try { localStorage.setItem(favoritesKey, JSON.stringify([...favorites])); } catch { /* Session-only favorites. */ }
+  updateFavorite();
+  if (favoritesOnly) { offset = 0; render(); }
+});
+for (const name of ['all', 'favorites']) element(name).addEventListener('click', () => {
+  favoritesOnly = name === 'favorites';
+  element('all').setAttribute('aria-pressed', String(!favoritesOnly));
+  element('favorites').setAttribute('aria-pressed', String(favoritesOnly));
+  offset = 0;
+  render();
+});
+element('timeframes').addEventListener('click', event => {
+  const target = event.target.closest('button[data-minutes]');
+  if (!target) return;
+  timeframe = Number(target.dataset.minutes);
+  for (const button of element('timeframes').querySelectorAll('button')) {
+    button.setAttribute('aria-pressed', String(button === target));
+  }
+  redrawPrice?.();
+});
 
 for (const [name, label] of Object.entries(venueNames)) element('venue').append(new Option(label, name));
 for (const id of ['search', 'venue', 'type']) element(id).addEventListener('input', () => { offset = 0; render(); });
@@ -276,3 +360,8 @@ try {
 } catch { /* Fall back to the packaged REST snapshot. */ }
 element('status').textContent = 'Сохранённые каталоги · проверьте время источника';
 render();
+if (document.body.hasAttribute('data-default-market')) {
+  const { markets } = searchCatalogue(catalogue, 'BTCUSDT', { venue: 'bybit', type: 'spot', limit: 50 });
+  const initial = markets.find(market => market.id === 'BTCUSDT' && market.active === true);
+  if (initial) open(initial);
+}
