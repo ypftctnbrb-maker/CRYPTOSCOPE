@@ -55,7 +55,7 @@ async function main() {
     browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome',
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-webgl'],
       ...(live && proxy && { proxy: { server: proxy, bypass: '127.0.0.1' } }) });
-    const page = await browser.newPage({ viewport: { width: Number(process.env.CATALOGUE_WIDTH || 390), height: 850 } });
+    const page = await browser.newPage({ viewport: { width: Number(process.env.CATALOGUE_WIDTH || 390), height: Number(process.env.CATALOGUE_HEIGHT || 850) } });
     await page.addInitScript(() => {
       const request = window.requestAnimationFrame.bind(window);
       const cancel = window.cancelAnimationFrame.bind(window);
@@ -406,6 +406,32 @@ async function main() {
           if (delay > 0) await page.waitForTimeout(delay);
           await page.screenshot({ clip, path: path.join(process.env.SPHERE_FRAMES, 'sphere-' + index + '.png') });
         }
+      }
+    }
+    if (process.env.DASHBOARD_EVIDENCE) {
+      await page.waitForFunction(() => document.querySelector('#instrument-chart-status').textContent.includes('5m · LIVE') &&
+        document.querySelector('#instrument-cvd-status').textContent.includes('LIVE'));
+      await page.getByRole('button', { name: '15м' }).click();
+      assert.equal(await page.getByRole('button', { name: '15м' }).getAttribute('aria-pressed'), 'true');
+      assert.match(await page.locator('#instrument-chart-status').innerText(), /15m из 5m/);
+      await page.getByRole('button', { name: '5м', exact: true }).click();
+      assert.match(await page.locator('#instrument-ohlc').innerText(), /O [^—].* C [^—]/);
+      assert.match(await page.locator('#instrument-chart-status').innerText(), /5m · LIVE/);
+      assert.match(await page.locator('#instrument-cvd-status').innerText(), /LIVE/);
+      await page.getByRole('button', { name: 'Добавить в избранное' }).click();
+      await page.getByRole('button', { name: 'Избранное', exact: true }).click();
+      await page.locator('#instrument-search').fill('');
+      await page.locator('#instrument-venue').selectOption('');
+      await page.locator('#instrument-type').selectOption('');
+      assert.equal(await page.locator('#instrument-results button').count(), 1);
+      await page.getByRole('button', { name: 'Каталог', exact: true }).click();
+      assert.equal(await page.locator('a[href*="invite"], [data-bingx-placement], script[src*="referral"]').count(), 0);
+      assert.equal(await page.getByRole('region', { name: 'Рыночные индикаторы' }).locator('article').count(), 6);
+      await page.evaluate(() => scrollTo(0, 0));
+      const dimensions = page.viewportSize();
+      await page.screenshot({ path: path.join(process.env.DASHBOARD_EVIDENCE, 'green-' + dimensions.width + '.png') });
+      if (dimensions.width === 390) {
+        await page.screenshot({ path: path.join(process.env.DASHBOARD_EVIDENCE, 'green-390-full.png'), fullPage: true });
       }
     }
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));

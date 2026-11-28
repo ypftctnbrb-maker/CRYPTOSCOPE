@@ -2,18 +2,29 @@
 set -euo pipefail
 
 # Build from the approved candidate, even when the checkout has local edits.
-base=f5f6dba4130c87c1c30bab72719cc2fbb222e6f0
-destination=${1:?Usage: bash scripts/prepare-preview.sh /path/to/new-directory}
+base=${2:-f5f6dba4130c87c1c30bab72719cc2fbb222e6f0}
+dashboard=${3:-}
+if [[ -n "$dashboard" && "$dashboard" != "--dashboard" ]]; then exit 2; fi
+destination=${1:?Usage: bash scripts/prepare-preview.sh /path/to/new-directory [sha --dashboard]}
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir "$scratch/source" "$scratch/public"
 git -C "$repo" archive "$base" | tar -x -C "$scratch/source"
 (cd "$scratch/source" && node scripts/prepare-public.cjs "$scratch/public")
-node - "$scratch/public" "$base" <<'NODE'
+node - "$scratch/public" "$base" "$dashboard" <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
-const [root, sha] = process.argv.slice(2);
+const [root, sha, mode] = process.argv.slice(2);
+if (mode === '--dashboard') {
+  const catalogue = fs.readFileSync(path.join(root, 'instruments.html'), 'utf8');
+  fs.writeFileSync(path.join(root, 'index.html'), catalogue.replace('<body>', '<body data-default-market>'));
+  for (const name of ['about.html', 'methodology.html', 'disclaimer.html', 'where-to-trade.html', 'reports',
+    'assets/app.js', 'assets/config.js', 'assets/information.css', 'assets/referrals.js',
+    'assets/referrals.css', 'assets/referral-market.js', 'assets/styles.css']) {
+    fs.rmSync(path.join(root, name), { recursive: true, force: true });
+  }
+}
 for (const file of fs.readdirSync(root, { recursive: true })) {
   if (!file.endsWith('.html')) continue;
   const target = path.join(root, file);

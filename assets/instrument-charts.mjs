@@ -61,3 +61,36 @@ export function createCvdChart(host, unit) {
     },
   };
 }
+
+// The venue adapters all supply five-minute bars. Larger intervals keep only
+// contiguous coverage and allow a partial bucket at the right edge.
+export function groupPriceBars(rows, minutes) {
+  const width = minutes * 60;
+  const buckets = [];
+  for (const row of rows) {
+    const time = Math.floor(row.time / width) * width;
+    let bucket = buckets.at(-1);
+    if (bucket?.time !== time) {
+      bucket = { ...row, time, complete: row.time === time, last: row.time };
+      buckets.push(bucket);
+    } else {
+      bucket.complete &&= row.time === bucket.last + 300;
+      bucket.last = row.time;
+      bucket.high = Math.max(bucket.high, row.high);
+      bucket.low = Math.min(bucket.low, row.low);
+      bucket.close = row.close;
+      bucket.volume = bucket.volume == null || row.volume == null ? null : bucket.volume + row.volume;
+    }
+  }
+  return buckets.filter((row, index) => row.complete &&
+    (index === buckets.length - 1 || row.last + 300 === row.time + width))
+    .map(({ complete, last, ...row }) => row);
+}
+
+export function movingAverage(rows, periods = 7, seconds = 300) {
+  return rows.flatMap((row, index) => {
+    if (index < periods - 1 || row.time - rows[index - periods + 1].time !== (periods - 1) * seconds) return [];
+    const sample = rows.slice(index - periods + 1, index + 1);
+    return [{ time: row.time, value: sample.reduce((sum, bar) => sum + bar.close, 0) / periods }];
+  });
+}
